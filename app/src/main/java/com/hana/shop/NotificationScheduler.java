@@ -12,7 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
-import android.icu.util.PersianCalendar;
+import android.icu.util.ULocale;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
@@ -109,7 +109,7 @@ public final class NotificationScheduler {
     }
     public static void notifyBirthdays(Context c) {
         if (!notificationsAllowed(c)) return;
-        PersianCalendar now = new PersianCalendar();
+        android.icu.util.Calendar now = android.icu.util.Calendar.getInstance(new ULocale("fa_IR@calendar=persian"));
         int year = now.get(android.icu.util.Calendar.YEAR);
         int month = now.get(android.icu.util.Calendar.MONTH) + 1;
         int day = now.get(android.icu.util.Calendar.DAY_OF_MONTH);
