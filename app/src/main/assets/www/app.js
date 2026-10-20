@@ -42,7 +42,7 @@ async function load(){try{const d=await IDB();const v=await new Promise((res,rej
 async function save(){db.savedAt=Date.now();try{const d=await IDB();await new Promise((res,rej)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(JSON.parse(JSON.stringify(db)),'db');t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){toast('ذخیره ناموفق بود! '+e.message);return false}}
 /* اجرای اتمی: روی نسخهٔ کپی کار می‌کند؛ در صورت خطا هیچ تغییری باقی نمی‌ماند */
 let txBusy=false;
-async function tx(fn){if(txBusy)return false;txBusy=true;const snap=JSON.stringify(db);try{fn();db.dirty=(db.dirty||0)+1;if(!await save())throw new Error('ذخیره نشد');return true}catch(e){db=JSON.parse(snap);toast(e.message);return false}finally{txBusy=false}}
+async function tx(fn){if(txBusy)return false;txBusy=true;const snap=JSON.stringify(db);try{fn();db.dirty=(db.dirty||0)+1;if(!await save())throw new Error('ذخیره نشد');try{syncPhoneAlerts()}catch(e){console.warn('Phone notifications sync:',e)}return true}catch(e){db=JSON.parse(snap);toast(e.message);return false}finally{txBusy=false}}
 /* ===== هستهٔ حسابداری دوطرفه ===== */
 function post(date,desc,lines,ref){if(db.lockDate&&date<=db.lockDate)throw new Error('دوره مالی تا '+db.lockDate+' بسته است.');if(!Array.isArray(lines)||!lines.length)throw new Error('سند حسابداری خالی است.');
  for(const l of lines){if(!l||typeof l.a!=='string'||!l.a)throw new Error('حساب سند نامعتبر است.');for(const k of ['d','c'])if(l[k]!==undefined&&(!Number.isSafeInteger(l[k])||l[k]<0))throw new Error('مبلغ سند باید عدد صحیح و غیرمنفی باشد.')}
@@ -138,8 +138,19 @@ R.more=()=>{V.innerHTML=`<div class="card"><b>امکانات</b>
  $('#bk').onclick=backup;let mode='';$('#rs').onclick=()=>{mode='restore';$('#fl').click()};$('#old').onclick=()=>{mode='old';$('#fl').click()};
  $('#fl').onchange=e=>readFile(e.target.files[0],mode);
  V.onclick=e=>{const g=e.target.dataset.g;if(g==='exp')expForm();if(g==='rec')recForm();if(g==='rem')remForm();if(g==='inv')invList();if(g==='rep')report();if(G[g])G[g]()}};
-function dl(name,txt){dlf(name,txt,'application/json')}
-async function backup(){const n=(db.shop.name+'_'+toJ().replace(/\//g,'-')+'_'+new Date().toTimeString().slice(0,5).replace(':','-')+'.json');dl(n,JSON.stringify(db));await tx(()=>{db.lastBackup=Date.now();db.dirty=-1});toast('پشتیبان JSON آماده شد');render()}
+function dl(name,txt){return dlf(name,txt,'application/json')}
+async function backup(){const n=(db.shop.name+'_'+toJ().replace(/\//g,'-')+'_'+new Date().toTimeString().slice(0,5).replace(':','-')+'.json');
+ try{await bkWriter(n,JSON.stringify(db));if(!await tx(()=>{db.lastBackup=Date.now();db.dirty=-1}))return false;toast('فایل پشتیبان با موفقیت ذخیره شد');render();return true}
+ catch(e){toast('خطا در ذخیرهٔ پشتیبان: '+e.message);return false}}
+function verifyFullBackup(j){if(!j||typeof j!=='object'||!Number.isInteger(j.version)||j.version>VER)return 'نسخهٔ فایل ناشناخته یا جدیدتر از برنامه است.';
+ const arrays=['customers','products','sales','purchases','suppliers','expenses','payments','reminders','journal','points'];
+ for(const k of arrays)if(!Array.isArray(j[k]))return 'بخش '+k+' در فایل پشتیبان ناقص یا نامعتبر است.';
+ for(const row of j.journal){if(!row||!Array.isArray(row.lines)||!row.lines.length)return 'سند حسابداری ناقص در فایل است.';
+  let debit=0,credit=0;for(const l of row.lines){if(!l||typeof l.a!=='string'||!l.a||!Number.isSafeInteger(l.d||0)||!Number.isSafeInteger(l.c||0)||(l.d||0)<0||(l.c||0)<0)return 'مبلغ یا حساب سند نامعتبر در فایل است.';debit+=l.d||0;credit+=l.c||0}
+  if(!Number.isSafeInteger(debit)||debit!==credit)return 'سند حسابداری نامتوازن در فایل پشتیبان است.'}
+ return ''}
+async function saveSafetyCopy(name){await bkWriter(name,JSON.stringify(db))}
+
 /* ===== مهاجرت از CRM قدیمی (v5 / v5.1) — تابع خالص؛ فقط روی db می‌نویسد و گزارش برمی‌گرداند ===== */
 function planOld(j){const c=j.customers||[],ph=x=>normPhone(x.phone||x.phoneRaw||'');
  const seen={};c.forEach(x=>{const p=ph(x);if(p)(seen[p]=seen[p]||[]).push(x)});
@@ -171,16 +182,17 @@ function migrateOld(j){const rep=planOld(j);const have=new Set(db.customers.map(
  if(debt>0)post(toJ(),'مانده افتتاحیه مطالبات (مهاجرت)',[{a:'1103',d:debt},{a:'3101',c:debt}],'legacy');
  if(stockVal>0)post(toJ(),'موجودی افتتاحیه کالا (مهاجرت)',[{a:'1104',d:stockVal},{a:'3101',c:stockVal}],'legacy');
  rep.skipped=skipped;return rep}
-function readFile(f,mode){if(!f)return;const r=new FileReader();r.onerror=()=>toast('خواندن فایل ممکن نشد.');r.onload=()=>{let j;try{j=JSON.parse(r.result)}catch{return toast('فایل JSON معتبر نیست.')}
+function readFile(f,mode){if(!f)return;const r=new FileReader();r.onerror=()=>toast('خواندن فایل ممکن نشد.');r.onload=async()=>{let j;try{j=JSON.parse(r.result)}catch{return toast('فایل JSON معتبر نیست.')}
  if(j&&j.kind==='partial')return importPartial(j);
- const isNew=Array.isArray(j.journal)&&Array.isArray(j.customers)&&typeof j.version==='number';
- if(isNew){const bad=(j.sales||[]).filter(s=>s.cid&&!j.customers.some(c=>c.id===s.cid)).length;
+ const isNew=!!j&&typeof j==='object'&&(Object.prototype.hasOwnProperty.call(j,'journal')||Object.prototype.hasOwnProperty.call(j,'shop')||Object.prototype.hasOwnProperty.call(j,'sales'));
+ if(isNew){const err=verifyFullBackup(j);if(err)return toast('بازیابی متوقف شد: '+err);const bad=(j.sales||[]).filter(s=>s.cid&&!j.customers.some(c=>c.id===s.cid)).length;
   if(!confirm(`بازیابی کامل: ${j.customers.length} مشتری، ${(j.products||[]).length} کالا، ${(j.sales||[]).length} فاکتور، ${j.journal.length} سند.\n${bad?bad+' فاکتور به مشتری ناموجود اشاره دارد.\n':''}داده‌های فعلی جایگزین می‌شوند (نسخهٔ خودکار ذخیره می‌شود). ادامه؟`))return;
-  dl('auto-before-restore.json',JSON.stringify(db));return tx(()=>{db=Object.assign(blank(),j)}).then(()=>{toast('بازیابی انجام شد');render()})}
+  try{await saveSafetyCopy('auto-before-restore.json')}catch(e){return toast('بازیابی لغو شد؛ نسخهٔ ایمنی ذخیره نشد: '+e.message)}
+  return tx(()=>{db=Object.assign(blank(),j)}).then(ok=>{if(ok){toast('بازیابی انجام شد');render()}else toast('بازیابی کامل نشد')})}
  if(!Array.isArray(j.customers))return toast('ساختار فایل شناخته نشد.');
  const p=planOld(j);
  const msg=`فایل CRM قدیمی (نسخه ${j.version||'؟'}):\n• ${p.total} مشتری (${p.already} قبلاً وارد شده)\n• ${p.purchases} خرید، ${p.perfumes} عطر، ${p.reminders} یادآوری\n• مانده بدهی خریدها: ${T(p.debt)}${p.over?`\n  ⚠ ${p.over} خرید دارای مانده بیشتر از مبلغ خرید است؛ مانده بدهی کامل ثبت می‌شود و خرید با علامت «ناهمخوان» نگه داشته می‌شود.`:''}${p.debt!==p.custDebt?`\n  ⚠ جمع مانده‌های ثبت‌شده روی مشتری‌ها ${T(p.custDebt)} است.`:''}\n• ${p.dupGroups} گروه مشتری با شمارهٔ تکراری (هیچ‌کدام حذف یا ادغام نمی‌شوند؛ فقط نشان‌گذاری می‌شوند)\n• ${p.orphanRem} یادآوری بدون مشتری مرتبط (با نام ذخیره‌شده وارد می‌شوند)\n• شمارهٔ نامعتبر: ${p.badPhone.length}\nادامه می‌دهید؟ (قبل از ورود یک نسخهٔ پشتیبان دانلود می‌شود)`;
- if(!confirm(msg))return;dl('auto-before-import.json',JSON.stringify(db));
+ if(!confirm(msg))return;try{await saveSafetyCopy('auto-before-import.json')}catch(e){return toast('ورود لغو شد؛ نسخهٔ ایمنی ذخیره نشد: '+e.message)}
  let rep;tx(()=>{rep=migrateOld(j)}).then(ok=>{if(!ok)return;alert(`مهاجرت انجام شد.\nمشتری: ${db.customers.length}\nمطالبات افتتاحیه: ${T(bal('1103'))}\nرد شده (بدون شمارهٔ معتبر): ${rep.skipped.length}${rep.skipped.length?'\n'+rep.skipped.join('، '):''}`);render()})};r.readAsText(f)}
 function recForm(){const ds=db.customers.filter(c=>cDebt(c.id)>0);if(!ds.length)return toast('مشتری بدهکاری وجود ندارد.');
  modal(`<h3>دریافت از مشتری</h3><label>مشتری</label><select id="c">${ds.map(c=>`<option value="${c.id}">${esc(c.name)} — ${T(cDebt(c.id))}</option>`).join('')}</select><label>مبلغ</label><input id="a" inputmode="numeric"><label>به</label><select id="m"><option value="1101">صندوق</option><option value="1102">بانک</option></select><div class="err" id="e"></div><button class="b" id="ok">ثبت</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
@@ -188,14 +200,15 @@ function recForm(){const ds=db.customers.filter(c=>cDebt(c.id)>0);if(!ds.length)
  if(await tx(()=>{const id=uid(),amt=a;cSales(cid).filter(s=>s.total>s.paid).forEach(s=>{const t=Math.min(a,s.total-s.paid);s.paid+=t;a-=t;s.status=s.paid>=s.total?'paid':'part'});
   db.payments.push({id,date:toJ(),cid,amt,to:$('#m').value});post(toJ(),'دریافت از '+cust(cid).name,[{a:$('#m').value,d:amt},{a:'1103',c:amt}],id)})){close();toast('دریافت ثبت شد');render()}}}
 $('#bTheme').onclick=async()=>{await tx(()=>db.theme=db.theme==='dark'?'light':'dark');render()};
-load().then(render);
+load().then(()=>{render();syncPhoneAlerts()});
 
 /* ================= افزونه‌ها: فروش/خرید اتمی، مرجوعی، تأمین‌کننده، دفاتر، چاپ، CSV، بستن دوره ================= */
 const G={};
 const supBal=id=>db.journal.reduce((s,j)=>s+j.lines.filter(l=>l.a==='2101'&&l.p===id).reduce((x,l)=>x+(l.c||0)-(l.d||0),0),0);
 const sup=id=>db.suppliers.find(x=>x.id===id);
 const blobB64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(',')[1]||'');f.readAsDataURL(b)});
-const dlf=async(name,txt,type)=>{const b=new Blob([txt],{type});if(window.AndroidBridge){AndroidBridge.saveFile(name,await blobB64(b),type);return}const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1e3)};
+const dlf=async(name,txt,type)=>{const b=new Blob([txt],{type});if(window.AndroidBridge){const ok=AndroidBridge.saveFile(name,await blobB64(b),type);if(ok!==true)throw new Error('اندروید ذخیرهٔ فایل را تأیید نکرد');return true}
+ const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1e3);return true};
 const csvOut=rows=>'\uFEFF'+rows.map(r=>r.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
 const csvParse=t=>t.replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean).map(l=>{const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===','&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o});
 /* --- هستهٔ فروش (اتمی) --- */
@@ -802,7 +815,7 @@ function taskBucket(it,t){return it.done?'done':it.date<t?'overdue':it.date===t?
 function mkTaskDone(it,out,note,next){if(it.virtual){db.comms.push({id:uid(),cid:it.cid,date:toJ(),ch:out,title:it.bdKey});return}
  const r=db.reminders.find(x=>x.id===it.id);if(!r)throw new Error('کار یافت نشد.');if(r.done)throw new Error('این کار قبلاً انجام شده است.');if(next&&!validJ(next))throw new Error('تاریخ پیگیری بعدی معتبر نیست.');
  r.done=true;r.doneDate=toJ();r.result=out;r.note=note||'';if(r.cid)db.comms.push({id:uid(),cid:r.cid,date:toJ(),ch:out,title:r.title});
- if(next)db.reminders.push({id:uid(),cid:r.cid||'',type:r.type||'',title:'پیگیری: '+r.title,date:normJ(next),done:false})}
+ if(next)db.reminders.push({id:uid(),cid:r.cid||'',type:r.type||'',title:'پیگیری: '+r.title,date:normJ(next),time:r.time||'09:00',done:false})}
 function mkSnooze(id,date){const r=db.reminders.find(x=>x.id===id);if(!r||r.done)throw new Error('کار یافت نشد.');if(!validJ(date))throw new Error('تاریخ معتبر نیست.');r.date=normJ(date)}
 function resultDlg(it,pre){modal(`<h3>ثبت نتیجه</h3><div class="k">${esc(it.title)}</div><label>نتیجه</label><select id="o">${['پیام ارسال شد','تماس گرفتم','خرید کرد','جواب نداد','انجام شد','نیاز ندارد'].map(x=>`<option${x===pre?' selected':''}>${x}</option>`).join('')}</select><label>یادداشت</label><textarea id="n" rows="2"></textarea>
  <label>پیگیری بعدی (اختیاری)</label><input id="nx" class="jd" readonly placeholder="انتخاب تاریخ"><div class="err" id="e"></div><button class="b" id="ok">ثبت و انجام شد</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
@@ -814,20 +827,23 @@ function expForm(p,cb){p=p||{};modal(`<h3>هزینهٔ جدید</h3><label>دس�
  <label>پرداخت</label><select id="m"><option value="1101">نقدی از صندوق</option><option value="1102">از بانک</option><option value="2103">نسیه (پرداخت بعداً)</option></select>
  <label><input type="checkbox" id="rc" style="width:auto;min-height:0" ${p.recur?'checked':''}> یادآوری ماه بعد (هزینه تکراری)</label><div class="err" id="e"></div><button class="b" id="ok">ثبت</button><button class="b s" id="no">لغو</button>`);if(p.method)$('#m').value=p.method;$('#no').onclick=close;
  $('#ok').onclick=async()=>{if(await tx(()=>{let cat=$('#ec').value;const n=$('#nc').value.trim();if(n)cat=addCat(n);mkExpense({cat,desc:$('#a').value.trim(),amt:num($('#b').value),date:$('#ed1').value,method:$('#m').value,recur:$('#rc').checked})})){close();toast('هزینه ثبت شد');cb&&await cb();render()}}}
-function remForm(d0){let cid='';modal(`<h3>کار / یادآوری جدید</h3><label>عنوان</label><input id="a"><label>نوع</label><select id="rt">${['پیگیری مشتری','خرید مجدد','پرداخت','شخصی','سایر'].map(x=>`<option>${x}</option>`).join('')}</select><label>تاریخ</label><input id="d" class="jd" readonly value="${d0||toJ()}">
+function remForm(d0){let cid='';modal(`<h3>کار / یادآوری جدید</h3><label>عنوان</label><input id="a"><label>نوع</label><select id="rt">${['پیگیری مشتری','خرید مجدد','پرداخت','شخصی','سایر'].map(x=>`<option>${x}</option>`).join('')}</select><label>تاریخ (شمسی)</label><input id="d" class="jd" readonly value="${d0||toJ()}"><label>ساعت اعلان روی گوشی</label><input id="tm" type="time" value="11:00"><div class="k">برای نمونه: ۲۹ام ساعت ۱۱:۰۰. برای اعلان، مجوز اعلان‌ها را فعال کنید.</div>
  <label>مشتری مرتبط (اختیاری)</label><input id="rc" placeholder="جستجوی نام یا موبایل" autocomplete="off"><div id="rcr"></div><div class="err" id="e"></div><button class="b" id="ok">ثبت</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
  $('#rc').oninput=e=>{cid='';const r=findCust(e.target.value);$('#rcr').innerHTML=r.map(c=>`<div class="row" data-k="${c.id}" style="cursor:pointer;min-height:44px"><span>${esc(c.name)}</span><span class="k">${esc(c.phone)}</span></div>`).join('')};
  $('#rcr').onclick=e=>{const k=e.target.closest('[data-k]')?.dataset.k;if(k){cid=k;$('#rc').value=cust(k).name;$('#rcr').innerHTML=''}};
- $('#ok').onclick=async()=>{if(!validJ($('#d').value)||!$('#a').value.trim())return $('#e').textContent='عنوان و تاریخ معتبر لازم است.';
-  if(await tx(()=>db.reminders.push({id:uid(),title:$('#a').value.trim(),type:$('#rt').value,date:normJ($('#d').value),cid,done:false}))){close();toast('ثبت شد');render()}}}
+ $('#ok').onclick=async()=>{if(!validJ($('#d').value)||!$('#a').value.trim()||!validReminderTime($('#tm').value))return $('#e').textContent='عنوان، تاریخ و ساعت معتبر لازم است.';
+  if(await tx(()=>db.reminders.push({id:uid(),title:$('#a').value.trim(),type:$('#rt').value,date:normJ($('#d').value),time:$('#tm').value,cid,done:false}))){close();toast('ثبت شد');render()}}}
 R.task=()=>{const t=toJ(),all=taskItems(),B={overdue:[],today:[],week:[],later:[],done:[]};all.forEach(it=>B[taskBucket(it,t)].push(it));
  const list=(B[tk.f]||[]).slice().sort((a,b)=>tk.f==='done'?(b.doneDate||b.date).localeCompare(a.doneDate||a.date):tk.f==='overdue'?b.date.localeCompare(a.date):a.date.localeCompare(b.date)),sh=list.slice(0,60);
  V.innerHTML=`<div class="row"><button class="b s" id="bk" style="margin:0">→ بازگشت</button><button class="b" id="nw" style="margin:0">+ کار جدید</button></div>
+ <div class="card"><b>🔔 اعلان‌های گوشی</b><div class="k">یادآوری کارها در ساعت انتخابی و تولد مشتری‌ها ساعت ۹ صبح. روی اندروید باید مجوز اعلان داده شود؛ برای اعلان دقیق نیز دسترسی ساعت‌های دقیق را فعال کنید.</div><button class="b" id="notifyOn">فعال‌کردن اعلان‌ها</button><button class="b s" id="notifyExact">فعال‌کردن ساعت دقیق (اختیاری)</button></div>
  <div class="chips" style="margin-top:8px">${[['overdue','عقب‌افتاده'],['today','امروز'],['week','۷ روز آینده'],['later','بعدی'],['done','انجام‌شده']].map(c=>`<button data-f="${c[0]}" class="${tk.f===c[0]?'on':''}">${c[1]} (${fa(B[c[0]].length)})</button>`).join('')}</div>
  <div class="k">${fa(list.length)} مورد${list.length>60?' — ۶۰ مورد نخست نمایش داده می‌شود':''}</div>
- ${sh.map(it=>{const c=cust(it.cid),phone=c&&c.phone;return `<div class="card" data-t="${esc(it.id)}"><b>${esc(it.title)}</b><div class="k">${fa(it.date)} · ${esc(it.type||'کار')}${c?' · '+esc(c.name):it.cname?' · '+esc(it.cname):''}</div>${it.result?`<div class="k">نتیجه: ${esc(it.result)}${it.note?' — '+esc(it.note):''}</div>`:''}
+ ${sh.map(it=>{const c=cust(it.cid),phone=c&&c.phone;return `<div class="card" data-t="${esc(it.id)}"><b>${esc(it.title)}</b><div class="k">${fa(it.date)}${it.virtual?'':(' · ساعت '+fa(it.time||'09:00'))} · ${esc(it.type||'کار')}${c?' · '+esc(c.name):it.cname?' · '+esc(it.cname):''}</div>${it.result?`<div class="k">نتیجه: ${esc(it.result)}${it.note?' — '+esc(it.note):''}</div>`:''}
  ${it.done?(it.virtual?'':'<button class="b s" data-a="undo">بازگردانی</button>'):`${c?`<button class="b s" data-a="msg">پیام</button><a class="b s" href="tel:${esc(phone)}">تماس</a><button class="b s" data-a="p360">پرونده</button>`:''}${it.tpl?'<button class="b" data-a="exp">ثبت هزینه</button>':''}${it.type==='چک'?'<button class="b" data-a="chq">مدیریت چک</button>':''}<button class="b" data-a="res">ثبت نتیجه ✓</button>${it.virtual?'':'<button class="b s" data-a="snz">تعویق</button><button class="b s d" data-a="del" style="color:#fff">حذف</button>'}`}</div>`}).join('')||'<div class="card k">موردی در این بخش نیست.</div>'}`;
  $('#bk').onclick=()=>go('more');$('#nw').onclick=()=>remForm();
+ $('#notifyOn').onclick=()=>{if(window.AndroidBridge&&AndroidBridge.requestNotifications)AndroidBridge.requestNotifications();else toast('اعلان روی گوشی فقط در نسخهٔ اندروید فعال می‌شود')};
+ $('#notifyExact').onclick=()=>{if(window.AndroidBridge&&AndroidBridge.requestExactAlarms)AndroidBridge.requestExactAlarms();else toast('این تنظیم فقط در نسخهٔ اندروید در دسترس است')};
  V.onclick=async e=>{const f=e.target.dataset.f,a=e.target.dataset.a,id=e.target.closest('[data-t]')?.dataset.t;if(f){tk.f=f;return R.task()}if(!a)return;const it=taskItems().find(x=>x.id===id);if(!it)return;
   if(a==='msg')msgDlg(it.cid,TPL_OF[it.type]);if(a==='p360')p360(it.cid);if(a==='chq')G.chq();if(a==='res')resultDlg(it,it.type==='خرید مجدد'?'پیام ارسال شد':'انجام شد');if(a==='snz')snoozeDlg(it);
   if(a==='exp')expForm({...it.tpl,recur:true},async()=>{await tx(()=>mkTaskDone(it,'هزینه ثبت شد','',''))});
@@ -916,8 +932,18 @@ let bkWriter=(n,t)=>dlf(n,t,'application/json');
 function bkDays(){return db.lastBackup?Math.floor((Date.now()-db.lastBackup)/864e5):null}
 function bkBanner(){const d=bkDays();if(!(db.dirty>0)||(d!==null&&d<3))return '';return `<div class="bkb" role="alert"><span>⚠️ ${d===null?'هنوز پشتیبان نگرفته‌اید':fa(d)+' روز از آخرین پشتیبان گذشته'} (${fa(db.dirty)} تغییر ذخیره‌نشده)</span><button data-act="backup">ذخیره پشتیبان</button></div>`}
 async function autoBackup(){try{if(!window.AndroidBridge||!(db.dirty>0)||Date.now()-(db.autoBk||0)<864e5)return false;
- await bkWriter('خودکار_'+(db.shop.name||'فروشگاه')+'_'+toJ().replace(/\//g,'-')+'.json',JSON.stringify(db));db.lastBackup=db.autoBk=Date.now();db.dirty=0;await save();return true}catch(e){return false}}
+ await bkWriter('خودکار_'+(db.shop.name||'فروشگاه')+'_'+toJ().replace(/\//g,'-')+'.json',JSON.stringify(db));return await tx(()=>{db.lastBackup=db.autoBk=Date.now();db.dirty=-1})}catch(e){return false}}
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+/* اعلان‌های اندروید: تولد بر پایهٔ ماه/روز شمسی، کارها با تاریخ/ساعت محلی */
+function validReminderTime(t){return /^([01]\d|2[0-3]):[0-5]\d$/.test(en(t||''))}
+function reminderMillis(date,time){if(!validJ(date)||!validReminderTime(time))return NaN;
+ const [y,m,d]=normJ(date).split('/').map(Number),g=d2g(j2d(y,m,d)),[h,mi]=en(time).split(':').map(Number);
+ return new Date(g.gy,g.gm-1,g.gd,h,mi,0,0).getTime()}
+function phoneAlertData(){const birthdays=db.customers.filter(c=>!c.archived&&c.birth&&validJ(c.birth)).map(c=>{
+ const a=normJ(c.birth).split('/').map(Number);return{id:String(c.id),name:String(c.name||'مشتری'),month:a[1],day:a[2]}});
+ const reminders=db.reminders.filter(r=>!r.done&&validJ(r.date)).map(r=>({id:String(r.id),title:String(r.title||'یادآوری فروشگاه'),when:reminderMillis(r.date,r.time||'09:00')})).filter(r=>Number.isFinite(r.when)&&r.when>Date.now());
+ return{birthdays,reminders}}
+function syncPhoneAlerts(){try{if(window.AndroidBridge&&AndroidBridge.syncNotifications)AndroidBridge.syncNotifications(JSON.stringify(phoneAlertData()))}catch(e){console.warn('Could not schedule Android reminders',e)}}
 /* قفل */
 const lkGet=()=>{try{return JSON.parse(localStorage.getItem('hana_lock')||'null')}catch(e){return null}};
 const lkPut=o=>{try{localStorage.setItem('hana_lock',o?JSON.stringify(o):'')}catch(e){}};

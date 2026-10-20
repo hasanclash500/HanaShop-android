@@ -29,6 +29,7 @@ jobs:
           node reg.js app.js
           node t_ui.js
           node t_pages.js
+          node t_notify_backup.js
 
       - name: Set up Java 17
         uses: actions/setup-java@v4

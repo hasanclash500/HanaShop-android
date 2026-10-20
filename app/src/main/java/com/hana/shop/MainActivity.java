@@ -1,6 +1,11 @@
 package com.hana.shop;
 
 import android.app.AlertDialog;
+import android.Manifest;
+import android.app.AlarmManager;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
@@ -42,9 +47,14 @@ public class MainActivity extends AppCompatActivity {
     private WebView web;
     private ValueCallback<Uri[]> chooser;
     private ActivityResultLauncher<Intent> pick;
+    private ActivityResultLauncher<String> askNotificationPermission;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        askNotificationPermission = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            if (granted && web != null) web.evaluateJavascript("window.syncPhoneAlerts&&syncPhoneAlerts()", null);
+            if (!granted) toast("برای اعلان تولد و یادآوری، مجوز اعلان را فعال کنید");
+        });
         web = new WebView(this);
         setContentView(web);
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
@@ -96,6 +106,11 @@ public class MainActivity extends AppCompatActivity {
         else web.restoreState(b);
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        if (web != null) web.evaluateJavascript("window.syncPhoneAlerts&&syncPhoneAlerts()", null);
+    }
+
     @Override protected void onPause() { super.onPause(); if (web != null) web.evaluateJavascript("window.autoBackup&&autoBackup()", null); }
 
     @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); web.saveState(o); }
@@ -104,7 +119,34 @@ public class MainActivity extends AppCompatActivity {
     private static String safe(String n) { String r = n == null ? "file" : n.replaceAll("[\\\\/:*?\"<>|]", "_"); return r.isEmpty() ? "file" : r; }
 
     private class Bridge {
-        @JavascriptInterface public void saveFile(String name, String b64, String type) {
+        @JavascriptInterface public void syncNotifications(String json) {
+            try { NotificationScheduler.sync(MainActivity.this, json); }
+            catch (Exception e) { toast("برنامه‌ریزی اعلان ممکن نشد: " + e.getMessage()); }
+        }
+        @JavascriptInterface public boolean notificationsEnabled() {
+            return NotificationScheduler.notificationsAllowed(MainActivity.this);
+        }
+        @JavascriptInterface public void requestNotifications() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33 && !NotificationScheduler.notificationsAllowed(MainActivity.this))
+                    askNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
+                else { toast("اعلان‌های برنامه فعال است"); web.evaluateJavascript("window.syncPhoneAlerts&&syncPhoneAlerts()", null); }
+            });
+        }
+        @JavascriptInterface public boolean exactAlarmEnabled() {
+            return NotificationScheduler.exactEnabled(MainActivity.this);
+        }
+        @JavascriptInterface public void requestExactAlarms() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !NotificationScheduler.exactEnabled(MainActivity.this)) {
+                    try { startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:" + getPackageName()))); }
+                    catch (Exception e) { toast("از تنظیمات گوشی، مجوز آلارم دقیق را فعال کنید"); }
+                } else toast("اعلان‌های دقیق فعال هستند");
+            });
+        }
+
+        @JavascriptInterface public boolean saveFile(String name, String b64, String type) {
             try {
                 byte[] data = Base64.decode(b64, Base64.DEFAULT);
                 String n = safe(name);
@@ -115,13 +157,15 @@ public class MainActivity extends AppCompatActivity {
                     cv.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
                     Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
                     if (u == null) throw new Exception("ذخیره ممکن نشد");
-                    try (OutputStream os = getContentResolver().openOutputStream(u)) { os.write(data); }
+                    try (OutputStream os = getContentResolver().openOutputStream(u)) { if (os == null) throw new Exception("فایل باز نشد"); os.write(data); }
                 } else {
                     File dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                    if (dir == null) throw new Exception("پوشهٔ فایل در دسترس نیست");
                     try (FileOutputStream os = new FileOutputStream(new File(dir, n))) { os.write(data); }
                 }
-                toast("ذخیره شد: " + n + (Build.VERSION.SDK_INT >= 29 ? " (پوشهٔ Download)" : ""));
-            } catch (Exception e) { toast("خطا در ذخیرهٔ فایل: " + e.getMessage()); }
+                toast("ذخیره شد: " + n + (Build.VERSION.SDK_INT >= 29 ? " (پوشهٔ Download)" : " (پوشهٔ اختصاصی برنامه)"));
+                return true;
+            } catch (Exception e) { toast("خطا در ذخیرهٔ فایل: " + e.getMessage()); return false; }
         }
         @JavascriptInterface public void shareFile(String name, String b64, String mime, String text) {
             try {
