@@ -11,6 +11,7 @@ function rejects(expr){return R("(()=>{try{"+expr+";return false}catch(e){return
   await new Promise(r=>setTimeout(r,70));
   R("ensureDefaults()");
   check('new cashCounts initialized without schema replacement',R('Array.isArray(db.cashCounts)&&db.version===1'));
+  check('dashboard integration renders without exceptions',(()=>{try{R('R.dash()');return true}catch(e){console.error(e);return false}})());
   const id=R("HanaBusiness.makeMeasuredProduct({name:'عطر آزمایشی',unit:'میلی‌لیتر',price:1000,cost:600,qty:100,min:10})");
   check('millilitre product created with unit',R("prod('"+id+"').unit==='میلی‌لیتر'&&prod('"+id+"').qty===100"));
   check('fractional quantity rejected instead of silent truncation',rejects("HanaBusiness.makeMeasuredProduct({name:'بد',unit:'گرم',price:100,cost:50,qty:1.5,min:0})"));
