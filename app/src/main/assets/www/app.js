@@ -641,9 +641,32 @@ R.stock=()=>{const k=nz(sf.q);let l=db.products.filter(p=>sf.kind==='inactive'?p
  V.onclick=e=>{const f=e.target.dataset.f,a=e.target.dataset.act,id=e.target.closest('[data-id]')?.dataset.id;if(f){sf.kind=f;R.stock()}if(a==='edit')prodEdit(id);if(a==='adj')stockAdjust(id);if(a==='rb')rebatch(id);if(a==='del')prodDelete(id)}};
 function mkProdEdit(id,o){const p=prod(id);if(!p)throw new Error('کالا یافت نشد.');if(!o.name)throw new Error('نام کالا الزامی است.');if(o.price<0||o.min<0)throw new Error('مقادیر نمی‌توانند منفی باشند.');
  if(o.barcode&&db.products.some(x=>x.id!==id&&x.barcode===o.barcode))throw new Error('این بارکد برای کالای دیگری ثبت شده است.');Object.assign(p,o)}
+function buyExistingProduct(id){
+ const p=prod(id);if(!p)return toast('کالا یافت نشد.');
+ modal('<h3>خرید جدید / افزایش موجودی — '+esc(p.name)+'</h3>'+
+ '<div class="card"><div class="row"><span>موجودی فعلی</span><b>'+fa(p.qty)+' '+esc(p.unit)+'</b></div>'+
+ '<div class="row"><span>بهای میانگین فعلی هر واحد</span><b>'+T(p.cost)+'</b></div></div>'+
+ '<label>مقدار خرید جدید ('+esc(p.unit)+')</label><input id="bxQty" inputmode="numeric" placeholder="مثلاً 50">'+
+ '<label>قیمت خرید هر واحد (تومان)</label><input id="bxCost" inputmode="numeric" value="'+p.cost+'">'+
+ '<label>قیمت فروش جدید هر واحد (تومان)</label><input id="bxPrice" inputmode="numeric" value="'+p.price+'">'+
+ '<label>تأمین‌کننده</label><select id="bxSup"><option value="">— بدون —</option>'+db.suppliers.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select>'+
+ '<label>روش پرداخت</label><select id="bxMethod"><option value="1101">نقدی (صندوق)</option><option value="1102">بانک</option><option value="2101">نسیه (بدهی به تأمین‌کننده)</option></select>'+
+ '<div class="k">مقدار واردشده به موجودی فعلی اضافه می‌شود؛ قیمت خرید به‌صورت میانگین موزون محاسبه و سند خرید ثبت می‌شود.</div>'+
+ '<div class="row"><span>موجودی پس از خرید</span><b id="bxResult">'+fa(p.qty)+' '+esc(p.unit)+'</b></div>'+
+ '<div class="err" id="bxError"></div><button class="b" id="bxSave">ثبت خرید و به‌روزرسانی قیمت</button><button class="b s" id="bxCancel">لغو</button>');
+ const parse=id=>{const t=en($(id).value).replace(/[,،٬\\s]/g,'');return /^\\d+$/.test(t)?Number(t):NaN};
+ $('#bxQty').oninput=()=>{const n=parse('#bxQty');$('#bxResult').textContent=(Number.isSafeInteger(n)?fa(p.qty+n):'—')+' '+p.unit};
+ $('#bxCancel').onclick=close;
+ $('#bxSave').onclick=async()=>{
+  const n=parse('#bxQty'),cost=parse('#bxCost'),price=parse('#bxPrice'),method=$('#bxMethod').value,sup=$('#bxSup').value;
+  if(!Number.isSafeInteger(n)||n<=0||!Number.isSafeInteger(cost)||cost<=0||!Number.isSafeInteger(price)||price<0||!Number.isSafeInteger(p.qty+n))return $('#bxError').textContent='مقدار خرید و قیمت‌ها باید اعداد صحیح و معتبر باشند.';
+  if(method==='2101'&&!sup)return $('#bxError').textContent='برای خرید نسیه تأمین‌کننده را انتخاب کنید.';
+  if(await tx(()=>{mkBuy(id,n,cost,method,sup);mkProdEdit(id,{name:p.name,brand:p.brand||'',barcode:p.barcode||'',unit:p.unit,price,min:p.min||0,active:p.active!==false})})){close();toast('خرید ثبت و موجودی و قیمت فروش به‌روز شد');render()}
+ };
+}
 function prodEdit(id){const p=prod(id);modal(`<h3>ویرایش کالا</h3><label>نام</label><input id="a" value="${esc(p.name)}"><label>برند</label><input id="b" value="${esc(p.brand||'')}"><label>بارکد</label><input id="c" inputmode="numeric" value="${esc(p.barcode||'')}">
  <label>واحد</label><input id="u" value="${esc(p.unit)}"><label>قیمت فروش (تومان)</label><input id="p" inputmode="numeric" value="${p.price}"><label>حداقل موجودی</label><input id="m" inputmode="numeric" value="${p.min||0}">
- <label><input type="checkbox" id="ac" style="width:auto;min-height:0" ${p.active!==false?'checked':''}> فعال (قابل فروش)</label><div class="k">موجودی و بهای تمام‌شده فقط از «تعدیل موجودی» یا خرید و فروش تغییر می‌کنند تا اسناد حسابداری سالم بمانند.</div><div class="err" id="e"></div><button class="b" id="ok">ذخیره</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
+ <label><input type="checkbox" id="ac" style="width:auto;min-height:0" ${p.active!==false?'checked':''}> فعال (قابل فروش)</label><div class="k">موجودی و بهای تمام‌شده فقط از «تعدیل موجودی» یا خرید و فروش تغییر می‌کنند تا اسناد حسابداری سالم بمانند.</div><button class="b s" id="buyExisting">+ خرید جدید و افزایش موجودی</button><div class="err" id="e"></div><button class="b" id="ok">ذخیره</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;$('#buyExisting').onclick=()=>buyExistingProduct(id);
  $('#ok').onclick=async()=>{if(await tx(()=>mkProdEdit(id,{name:$('#a').value.trim(),brand:$('#b').value.trim(),barcode:en($('#c').value).trim(),unit:$('#u').value.trim()||'گرم',price:num($('#p').value),min:num($('#m').value),active:$('#ac').checked}))){close();toast('ذخیره شد');render()}}}
 function mkAdjust(id,newQty,reason){const p=prod(id);if(!p)throw new Error('کالا یافت نشد.');if(!Number.isInteger(newQty)||newQty<0&&!db.allowNegStock)throw new Error('موجودی جدید معتبر نیست.');
  const d=newQty-p.qty;if(d===0)throw new Error('موجودی جدید با موجودی فعلی برابر است.');const val=Math.abs(d)*p.cost,mid=uid();
