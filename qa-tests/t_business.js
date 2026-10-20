@@ -33,6 +33,10 @@ function rejects(expr){return R("(()=>{try{"+expr+";return false}catch(e){return
   check('cash count survives JSON round-trip',R("JSON.parse(JSON.stringify(db)).cashCounts.length")===1);
   check('customer opt-out preserved',R("HanaBusiness.retentionData().top.find(x=>x.id==='client1').promo")===false);
   check('new and never-bought customers separated',R('HanaBusiness.retentionData().never.length')===0);
+  const imp=R("mkImportPartial({section:'products',data:[{id:'new-import',name:'عطر وارداتی',qty:12,cost:500,price:1000,unit:'گرم'}]})");
+  check('partial product import creates opening inventory journal',imp.add===1&&R("HanaBusiness.ledgerHealth().every(x=>x.ok)"));
+  check('invalid imported stock rejected',rejects("mkImportPartial({section:'products',data:[{id:'bad-import',name:'خراب',qty:-3,cost:100}]})"));
+  check('clear waits for safety backup',fs.readFileSync('app.js','utf8').includes("try{await dl('auto-before-clear_"));
   R("db.journal[0].lines[0].d+=1");
   check('tampered journal detected by audit',R('HanaBusiness.ledgerHealth().some(x=>!x.ok)'));
   console.log('BUSINESS TESTS '+pass+' passed, '+fail+' failed');
