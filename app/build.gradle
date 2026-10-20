@@ -2,8 +2,23 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.hana.shop'
     compileSdk 34
-    defaultConfig { applicationId 'com.hana.shop'; minSdk 26; targetSdk 34; versionCode 1; versionName '1.0' }
-    buildTypes { release { minifyEnabled false } }
+    defaultConfig { applicationId 'com.hana.shop'; minSdk 26; targetSdk 34; versionCode 2; versionName '1.1' }
+    signingConfigs {
+        release {
+            if (System.getenv('HANASHOP_KEYSTORE_FILE')) {
+                storeFile file(System.getenv('HANASHOP_KEYSTORE_FILE'))
+                storePassword System.getenv('HANASHOP_STORE_PASSWORD')
+                keyAlias System.getenv('HANASHOP_KEY_ALIAS')
+                keyPassword System.getenv('HANASHOP_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 dependencies {
