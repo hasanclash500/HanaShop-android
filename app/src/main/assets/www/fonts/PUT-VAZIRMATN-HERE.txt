@@ -1,0 +1,5 @@
+Put these two files in this folder (font is SIL OFL, free to bundle):
+  Vazirmatn-Regular.woff2
+  Vazirmatn-Bold.woff2
+Source: https://github.com/rastikerdar/vazirmatn  (fonts/webfonts/ folder, rename if needed)
+style.css already declares @font-face for them. Without the files the app falls back to Tahoma and keeps working.
