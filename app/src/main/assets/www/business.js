@@ -140,6 +140,22 @@
       if(await tx(()=>makeMeasuredProduct(o))){close();toast('عطر ثبت شد');render()}
     };
   };
+  const priorDash=R.dash;
+  R.dash=function(){
+    priorDash();
+    ensureDefaults();
+    const check=ledgerHealth(),healthy=check.every(x=>x.ok),last=db.cashCounts[db.cashCounts.length-1],
+      margin=itemProfit(periodFrom(dp)).rows[0],inactive=retentionData(60).inactive.length;
+    V.insertAdjacentHTML('beforeend','<div class="card"><b>📌 مدیریت روزانه فروشگاه</b>'+
+      '<div class="row"><span>کنترل حسابداری</span><b class="'+(healthy?'pos':'neg')+'">'+(healthy?'بدون اختلاف':'نیازمند بررسی')+'</b></div>'+
+      '<div class="row"><span>آخرین اختلاف شمارش صندوق</span><b>'+(last?T(last.difference):'ثبت نشده')+'</b></div>'+
+      '<div class="row"><span>مشتریان بدون خرید در ۶۰ روز</span><b>'+fa(inactive)+' نفر</b></div>'+
+      '<div class="row"><span>بیشترین سود ناخالص کالایی در دوره</span><b>'+esc(margin?.name||'—')+'</b></div>'+
+      '<div class="grid"><button class="b s" id="dashAudit">کنترل حسابداری</button>'+
+      '<button class="b s" id="dashMargin">سود کالاها</button><button class="b s" id="dashCount">شمارش صندوق</button></div></div>');
+    const bind=(id,fn)=>{const el=V.querySelector(id);if(el)el.onclick=fn};
+    bind('#dashAudit',()=>G.businessAudit());bind('#dashMargin',()=>G.profitByProduct());bind('#dashCount',()=>G.cashCount());
+  };
   const oldMore=R.more;
   R.more=function(){
     oldMore();
