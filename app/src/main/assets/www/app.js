@@ -727,7 +727,7 @@ function importPartial(j){if(!confirm(`ورود ${j.section==='customers'?'مش�
 G.clear=function(){modal(`<h3>پاک کردن اطلاعات</h3><div class="err">این کار همه‌ی مشتریان، کالاها، فاکتورها، اسناد و تراکنش‌ها را پاک می‌کند. قبل از پاک‌سازی یک فایل پشتیبان JSON ذخیره می‌شود.</div>
  <label><input type="checkbox" id="ks" style="width:auto;min-height:0" checked> تنظیمات فروشگاه، قالب پیام‌ها، دسته‌ها و فهرست حساب‌ها حفظ شود</label><label>برای تأیید، کلمه‌ی «پاک» را بنویسید</label><input id="cf1"><div class="err" id="e"></div><button class="b d" id="ok">پاک کردن</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
  $('#ok').onclick=async()=>{if($('#cf1').value.trim()!=='پاک')return $('#e').textContent='برای تأیید باید دقیقاً «پاک» نوشته شود.';
-  dl('auto-before-clear_'+toJ().replace(/\//g,'-')+'.json',JSON.stringify(db));const keep=$('#ks').checked;
+  try{await dl('auto-before-clear_'+toJ().replace(/\//g,'-')+'.json',JSON.stringify(db))}catch(err){return $('#e').textContent='پاک‌سازی متوقف شد؛ ذخیره پشتیبان موفق نبود: '+err.message}const keep=$('#ks').checked;
   if(await tx(()=>{db=clearedDb(db,keep)})){close();toast('اطلاعات پاک شد؛ نسخه‌ی پشتیبان قبلی ذخیره شد');tab='dash';render()}}};
 function clearedDb(old,keep){const n=blank();if(keep)['shop','theme','tpl','loyalty','accounts','expCats','holidays','hijriOffset','pfmt','allowNegStock'].forEach(k=>{if(old[k]!==undefined)n[k]=JSON.parse(JSON.stringify(old[k]))});n.lastBackup=Date.now();n.dirty=-1;return n}
 $('#bSave').onclick=()=>backup();
