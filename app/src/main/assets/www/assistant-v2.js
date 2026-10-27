@@ -110,7 +110,7 @@
   }
   if(productCue&&p.ambiguous)return'چند کالا پیدا شد: '+p.names.join('، ')+'. نام دقیق‌تری بگویید.';
   // Respond to entity-free aggregate questions only after checking named records.
-  if(/(کم موجودی|کمبود|در حال تمام|زیر حداقل|موجودی کم)/.test(q)){
+  if(/(کم موجودی|کم موجود|کمبود|در حال تمام|زیر حداقل|موجودی کم)/.test(q)){
    const low=db.products.filter(x=>x.active!==false&&x.qty<=x.min);
    return low.length?'کالاهای کم‌موجودی: '+low.slice(0,8).map(x=>x.name+' '+fa(x.qty)+' '+x.unit).join('، ')+(low.length>8?'؛ و '+fa(low.length-8)+' کالای دیگر.':'.'):'فعلاً کالایی زیر حداقل موجودی نیست.';
   }
@@ -126,8 +126,8 @@
    const t=toJ(),items=db.reminders.filter(r=>!r.done&&r.date<=t);
    return items.length?'یادآوری‌های امروز و عقب‌افتاده: '+items.slice(0,8).map(x=>x.title+'، '+x.date+' ساعت '+(x.time||'09:00')).join('؛ '):'یادآوری عقب‌افتاده یا سررسید امروز ندارید.';
   }
-  if(/(چند مشتری|تعداد مشتری)/.test(q))return'تعداد مشتریان فعال: '+fa(db.customers.filter(c=>!c.archived).length)+'.';
-  if(/(چند کالا|تعداد کالا|چند نوع عطر)/.test(q))return'تعداد کالاهای فعال: '+fa(db.products.filter(x=>x.active!==false).length)+'.';
+  if(/(چند (تا )?مشتری|تعداد مشتری)/.test(q))return'تعداد مشتریان فعال: '+fa(db.customers.filter(c=>!c.archived).length)+'.';
+  if(/(چند (تا )?کالا|تعداد کالا|چند نوع عطر)/.test(q))return'تعداد کالاهای فعال: '+fa(db.products.filter(x=>x.active!==false).length)+'.';
   if(/(بدهی تامین|بدهی شرکت|بدهی فروشنده|به شرکت ها بدهکار)/.test(q))return'جمع بدهی به تأمین‌کنندگان: '+currency(-bal('2101'))+'.';
   if(/(بدهی مشتریان|مشتریان بدهکار|چقدر طلب دارم|مطالبات)/.test(q))return'جمع مطالبات مشتریان: '+currency(bal('1103'))+'.';
   if(/(صندوق|نقدینگی نقدی|پول نقد)/.test(q))return'مانده دفتری صندوق: '+currency(bal('1101'))+'. مبلغ واقعی را در «شمارش صندوق» کنترل کنید.';
@@ -224,7 +224,7 @@
    if(dragging){position(bot,start.left+dx,start.top+dy);e.preventDefault()}
   });
   const end=e=>{if(!start||e.pointerId!==start.id)return;
-   if(dragging){ignoreClick=true;try{localStorage.setItem(KEY,JSON.stringify({x:parseFloat(bot.style.left),y:parseFloat(bot.style.top)}))}catch(error){}}
+   if(dragging){ignoreClick=true;setTimeout(()=>{ignoreClick=false},250);try{localStorage.setItem(KEY,JSON.stringify({x:parseFloat(bot.style.left),y:parseFloat(bot.style.top)}))}catch(error){}}
    start=null;dragging=false};
   bot.addEventListener('pointerup',end);bot.addEventListener('pointercancel',end);
   bot.addEventListener('click',e=>{if(ignoreClick){ignoreClick=false;e.preventDefault();return}G.voiceAssistant()});
