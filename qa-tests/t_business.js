@@ -3,6 +3,7 @@ process.on('unhandledRejection',e=>console.error('UNHANDLED',e));
 const fs=require('fs'),{boot}=require('./harness');
 const A=boot('app.js'),R=s=>A.run(s);
 R(fs.readFileSync('business.js','utf8'));
+R(fs.readFileSync('phase1.js','utf8'));
 R("ensureDefaults();render=function(){};showInv=function(){};modal=function(){}");
 let pass=0,fail=0;
 function check(label,cond,extra=''){(cond?pass++:fail++);console.log((cond?'PASS ':'FAIL ')+label+(cond?'':' '+extra))}
@@ -14,7 +15,7 @@ function rejects(expr){return R("(()=>{try{"+expr+";return false}catch(e){return
   check('dashboard integration renders without exceptions',(()=>{try{R('R.dash()');return true}catch(e){console.error(e);return false}})());
   const id=R("HanaBusiness.makeMeasuredProduct({name:'عطر آزمایشی',unit:'میلی‌لیتر',price:1000,cost:600,qty:100,min:10})");
   check('millilitre product created with unit',R("prod('"+id+"').unit==='میلی‌لیتر'&&prod('"+id+"').qty===100"));
-  check('fractional quantity rejected instead of silent truncation',rejects("HanaBusiness.makeMeasuredProduct({name:'بد',unit:'گرم',price:100,cost:50,qty:1.5,min:0})"));
+  check('overprecision fractional quantity rejected instead of silent truncation',rejects("HanaBusiness.makeMeasuredProduct({name:'بد',unit:'گرم',price:100,cost:50,qty:1.2345,min:0})"));
   check('negative quantity rejected',rejects("HanaBusiness.makeMeasuredProduct({name:'بد',unit:'گرم',price:100,cost:50,qty:-2,min:0})"));
   check('mass-volume conversion not silently applied',rejects("mkProdEdit('"+id+"',{name:'عطر آزمایشی',unit:'گرم',price:1000,min:10})"));
   const cid='client1';R("db.customers.push({id:'"+cid+"',name:'مشتری نمونه',phone:'09121111111',promo:false})");
