@@ -41,6 +41,7 @@ jobs:
           node t_phase1.js
           node t_voice.js
           node t_assistant_v2.js
+          node t_customer_actions.js
           node t_refunds_finance.js
 
       - name: Set up Java 17
