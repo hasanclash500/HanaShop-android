@@ -141,6 +141,23 @@ public class MainActivity extends AppCompatActivity {
     private static String safe(String n) { String r = n == null ? "file" : n.replaceAll("[\\\\/:*?\"<>|]", "_"); return r.isEmpty() ? "file" : r; }
 
     private class Bridge {
+        @JavascriptInterface public void openSmsDraft(String phone, String body) {
+            runOnUiThread(() -> {
+                if (phone == null || !phone.matches("(09[0-9]{9}|989[0-9]{9})")) {
+                    toast("شماره موبایل برای پیامک معتبر نیست");
+                    return;
+                }
+                try {
+                    Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone));
+                    intent.putExtra("sms_body", body == null ? "" : body);
+                    startActivity(intent);
+                } catch (ActivityNotFoundException ex) {
+                    toast("برنامه پیامک روی گوشی پیدا نشد");
+                } catch (Exception ex) {
+                    toast("بازکردن پیامک ممکن نشد");
+                }
+            });
+        }
         @JavascriptInterface public void startVoiceRecognition() {
             runOnUiThread(() -> {
                 try {
