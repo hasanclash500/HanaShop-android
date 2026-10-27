@@ -33,14 +33,16 @@
     const by={};let excluded=0;
     db.sales.filter(s=>s.status!=='cancel'&&(!from||s.date>=from)).forEach(s=>{
       if(!Array.isArray(s.lines)||!s.lines.length){excluded++;return}
-      const rows=s.lines.filter(l=>l.n-(l.ret||0)>0);
+      // Include fully refunded damaged goods: their COGS remains a real loss.
+      // Fully refunded goods returned to stock have zero remaining cost.
+      const rows=s.lines.filter(l=>l.n-(l.ret||0)>0||(Number.isSafeInteger(l.cogs)&&l.cogs>(l.retGoodCogs||0)));
       const gross=rows.reduce((a,l)=>a+(l.n-(l.ret||0))*l.price,0);
       const netTotal=s.total;
       let allocated=0;
       rows.forEach((l,i)=>{
         const qty=l.n-(l.ret||0),p=prod(l.pid),revenue=i===rows.length-1?netTotal-allocated:Math.round(netTotal*(qty*l.price)/Math.max(1,gross));
         allocated+=revenue;
-        const cost=Number.isSafeInteger(l.cogs)?l.cogs-(l.retGoodCogs||0):Math.round(qty*(l.cost||0));
+        const cost=Number.isSafeInteger(l.cogs)?Math.max(0,l.cogs-(l.retGoodCogs||0)):Math.round(qty*(l.cost||0));
         const o=by[l.pid]||(by[l.pid]={pid:l.pid,name:p?.name||'کالای حذف‌شده',unit:p?.unit||'',qty:0,revenue:0,cost:0,profit:0});
         o.qty+=qty;o.revenue+=revenue;o.cost+=cost;o.profit+=revenue-cost;
       });
