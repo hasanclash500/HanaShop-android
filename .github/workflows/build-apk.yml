@@ -27,11 +27,13 @@ jobs:
         run: |
           cp ../app/src/main/assets/www/app.js ./app.js
           cp ../app/src/main/assets/www/business.js ./business.js
+          cp ../app/src/main/assets/www/management234.js ./management234.js
           node reg.js app.js
           node t_ui.js
           node t_pages.js
           node t_notify_backup.js
           node t_business.js
+          node t_management234.js
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
