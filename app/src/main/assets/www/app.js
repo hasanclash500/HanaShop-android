@@ -68,7 +68,7 @@ function nav(){$('#nav').innerHTML=TABS.map(t=>`<button class="${(tab===t[0]||(t
 const R={};
 R.dash=()=>{const today=toJ(),mon=today.slice(0,7),ok=db.sales.filter(s=>s.status!=='cancel');
  const sum=f=>ok.filter(f).reduce((s,x)=>s+x.total,0);
- const stockVal=db.products.reduce((s,p)=>s+p.qty*p.cost,0),low=db.products.filter(p=>p.qty<=p.min);
+ const stockVal=db.products.reduce((s,p)=>s+(globalThis.HanaPhase1?HanaPhase1.stockValue(p):p.qty*p.cost),0),low=db.products.filter(p=>p.qty<=p.min);
  const bd=db.customers.filter(c=>c.birth&&normJ(c.birth).slice(5)===today.slice(5));
  const rem=db.reminders.filter(r=>!r.done&&r.date<=today);
  const f=db.lockDate?addDays(db.lockDate,1):'',rev=-balP('4101',f)-balP('4102',f),cogs=balP('5101',f),exp=sumP('6',f,'');
@@ -633,7 +633,7 @@ R.stock=()=>{const k=nz(sf.q);let l=db.products.filter(p=>sf.kind==='inactive'?p
  if(sf.kind==='low')l=l.filter(p=>p.qty>0&&p.qty<=p.min);if(sf.kind==='out')l=l.filter(p=>p.qty<=0);
  if(k)l=l.filter(p=>nz(p.name).includes(k)||nz(p.brand||'').includes(k)||(p.barcode||'')===k);l.sort((a,b)=>a.name.localeCompare(b.name,'fa'));
  V.innerHTML=`<input id="q" placeholder="جستجوی نام، برند یا بارکد" value="${esc(sf.q)}"><div class="chips" style="margin-top:6px">${[['all','همه'],['low','کم‌موجود'],['out','تمام‌شده'],['inactive','غیرفعال']].map(c=>`<button data-f="${c[0]}" class="${sf.kind===c[0]?'on':''}">${c[1]}</button>`).join('')}</div>
- <div class="k">${fa(l.length)} کالا — ارزش موجودی: ${T(l.reduce((s,p)=>s+p.qty*p.cost,0))}</div><button class="b" id="addP">+ کالا</button><button class="b s" id="addS">ورود موجودی (خرید)</button>
+ <div class="k">${fa(l.length)} کالا — ارزش موجودی: ${T(l.reduce((s,p)=>s+(globalThis.HanaPhase1?HanaPhase1.stockValue(p):p.qty*p.cost),0))}</div><button class="b" id="addP">+ کالا</button><button class="b s" id="addS">ورود موجودی (خرید)</button>
  ${l.length?l.map(p=>`<div class="card" data-id="${p.id}"><b>${esc(p.name)}</b> <span class="k">${esc(p.brand||'')}</span>${p.active===false?'<span class="bd">غیرفعال</span>':''}
  <div class="k">موجودی: ${fa(p.qty)} ${esc(p.unit)} · خرید: ${T(p.cost)} · فروش: ${T(p.price)}</div>${p.recipe?'<div class="k">ترکیب: '+p.recipe.map(r=>esc(prod(r.pid)?.name||'؟')+' '+fa(Math.round(r.per*100))+'٪').join('، ')+'</div>':''}${p.qty<=0?'<div class="err">تمام‌شده</div>':p.qty<=p.min?'<div class="err">کم‌موجود</div>':''}
  <button class="b s" data-act="edit">ویرایش</button><button class="b s" data-act="adj">تعدیل موجودی</button>${p.recipe?'<button class="b s" data-act="rb">تولید دوباره</button>':''}<button class="b s d" data-act="del" style="color:#fff">حذف</button></div>`).join(''):'<div class="card k">کالایی پیدا نشد.</div>'}`;
@@ -714,13 +714,13 @@ function kpi(k){const f=periodFrom(dp),t=toJ();
  if(k==='ar')return listDlg('مطالبات از مشتریان',db.customers.filter(c=>cDebt(c.id)>0).sort((a,b)=>cDebt(b.id)-cDebt(a.id)).map(c=>({a:esc(c.name),b:T(cDebt(c.id)),f:()=>p360(c.id)})));
  if(k==='ap')return listDlg('بدهی به تأمین‌کنندگان',db.suppliers.filter(x=>supBal(x.id)>0).map(x=>({a:esc(x.name),b:T(supBal(x.id)),f:()=>payForm(x.id)})));
  if(k==='cash')return listDlg('صندوق و بانک',[{a:'صندوق',b:T(bal('1101')),f:G.cash},{a:'بانک',b:T(bal('1102')),f:G.cash}]);
- if(k==='stock')return listDlg('ارزش موجودی',db.products.filter(p=>p.qty*p.cost>0).sort((a,b)=>b.qty*b.cost-a.qty*a.cost).slice(0,40).map(p=>({a:esc(p.name)+`<br><span class="k">${fa(p.qty)} ${esc(p.unit)}</span>`,b:T(p.qty*p.cost),f:()=>stockAdjust(p.id)})));
+ if(k==='stock')return listDlg('ارزش موجودی',db.products.filter(p=>(globalThis.HanaPhase1?HanaPhase1.stockValue(p):p.qty*p.cost)>0).sort((a,b)=>(globalThis.HanaPhase1?HanaPhase1.stockValue(b):b.qty*b.cost)-(globalThis.HanaPhase1?HanaPhase1.stockValue(a):a.qty*a.cost)).slice(0,40).map(p=>({a:esc(p.name)+`<br><span class="k">${fa(p.qty)} ${esc(p.unit)}</span>`,b:T(globalThis.HanaPhase1?HanaPhase1.stockValue(p):p.qty*p.cost),f:()=>stockAdjust(p.id)})));
  if(k==='low')return listDlg('کالاهای کم‌موجود یا تمام‌شده',db.products.filter(p=>p.active!==false&&p.qty<=p.min).map(p=>({a:esc(p.name),b:`${fa(p.qty)} ${esc(p.unit)}`,f:()=>stockAdjust(p.id)})));
  if(k==='cust'){cf.kind='all';tab='cust';return render()}
  if(k==='bd'){const o=[];for(let i=0;i<=7;i++){const d=addDays(t,i);db.customers.forEach(c=>{if(!c.archived&&c.birth&&normJ(c.birth).slice(5)===d.slice(5))o.push({a:esc(c.name),b:i?`${fa(i)} روز دیگر`:'امروز',f:()=>msgDlg(c.id)})})}return listDlg('تولدهای ۷ روز آینده',o)}
  if(k==='rem'){tk.f='overdue';tab='task';return render()}if(k==='chq')return G.chq();if(k==='bk')return backup();
 }
-R.dash=()=>{const f=periodFrom(dp),t=toJ(),ok=okSales(f),n=plNums(f),stockVal=db.products.reduce((s,p)=>s+p.qty*p.cost,0),low=db.products.filter(p=>p.active!==false&&p.qty<=p.min).length;
+R.dash=()=>{const f=periodFrom(dp),t=toJ(),ok=okSales(f),n=plNums(f),stockVal=db.products.reduce((s,p)=>s+(globalThis.HanaPhase1?HanaPhase1.stockValue(p):p.qty*p.cost),0),low=db.products.filter(p=>p.active!==false&&p.qty<=p.min).length;
  const bd=db.customers.filter(c=>!c.archived&&c.birth&&normJ(c.birth).slice(5)===t.slice(5)).length,rem=db.reminders.filter(r=>!r.done&&r.date<=t).length,chq=(db.cheques||[]).filter(c=>c.status==='open'&&c.due<=addDays(t,7)).length;
  const K=[['sales','فروش دوره',T(ok.reduce((s,x)=>s+x.total,0))],['count','تعداد فاکتور',fa(ok.length)],['gp','سود ناخالص',T(n.gp),n.gp<0?'neg':'pos'],['np','سود خالص',T(n.np),n.np<0?'neg':'pos'],['exp','هزینه‌ها',T(n.ex)],['cash','صندوق و بانک',T(bal('1101')+bal('1102'))],['ar','مطالبات',T(bal('1103'))],['ap','بدهی به تأمین‌کنندگان',T(-bal('2101'))],['stock','ارزش موجودی',T(stockVal)],['low','کم‌موجود/تمام‌شده',fa(low),low?'neg':''],['cust','مشتریان',fa(db.customers.filter(c=>!c.archived).length)],['bd','تولد امروز',fa(bd)],['rem','یادآوری امروز/عقب‌افتاده',fa(rem),rem?'neg':''],['chq','چک‌های نزدیک سررسید',fa(chq),chq?'neg':'']];
  const tp=topProducts(f).map(r=>({id:r.pid,k:(prod(r.pid)?.name||'؟')+' ×'+fa(r.q),v:r.rev})),ec=expByCat(f).map(r=>({id:r.k,k:r.k,v:r.v}));
