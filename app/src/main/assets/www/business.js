@@ -11,7 +11,7 @@
   const whole=n=>Number.isSafeInteger(n)&&n>=0;
   function ledgerHealth(){
     const totals=db.journal.reduce((a,j)=>{(j.lines||[]).forEach(l=>{a.d+=l.d||0;a.c+=l.c||0});return a},{d:0,c:0});
-    const stock=Math.round(db.products.reduce((a,p)=>a+(p.qty||0)*(p.cost||0),0));
+    const stock=Math.round(db.products.reduce((a,p)=>a+(globalThis.HanaPhase1?HanaPhase1.stockValue(p):(p.qty||0)*(p.cost||0)),0));
     const receivable=db.customers.reduce((a,c)=>a+cDebt(c.id),0);
     const payable=db.suppliers.reduce((a,s)=>a+supBal(s.id),0);
     const checks=[
@@ -40,7 +40,7 @@
       rows.forEach((l,i)=>{
         const qty=l.n-(l.ret||0),p=prod(l.pid),revenue=i===rows.length-1?netTotal-allocated:Math.round(netTotal*(qty*l.price)/Math.max(1,gross));
         allocated+=revenue;
-        const cost=Math.round(qty*(l.cost||0));
+        const cost=Number.isSafeInteger(l.cogs)?l.cogs-(l.retGoodCogs||0):Math.round(qty*(l.cost||0));
         const o=by[l.pid]||(by[l.pid]={pid:l.pid,name:p?.name||'کالای حذف‌شده',unit:p?.unit||'',qty:0,revenue:0,cost:0,profit:0});
         o.qty+=qty;o.revenue+=revenue;o.cost+=cost;o.profit+=revenue-cost;
       });
