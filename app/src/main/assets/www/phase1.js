@@ -71,6 +71,24 @@
   const v=Math.round(n*o.cost),p={id:uid(),name:o.name,brand:o.brand||'',barcode:o.barcode||'',unit:o.unit||'گرم',price:o.price,cost:o.cost,qty:n,min,stockValue:v};
   db.products.push(p);if(v)post(toJ(),'موجودی افتتاحیه '+p.name,[{a:'1104',d:v},{a:'3101',c:v}],p.id);return p.id
  };
+ mkBlend=function(o){
+  const output=q(o.out),inputs=(o.ing||[]).filter(x=>x.pid&&x.qty>0);
+  if(!output||!inputs.length)throw Error('مقدار محصول ترکیبی و مواد اولیه لازم است');
+  const extra=o.extra||0;if(!goodMoney(extra))throw Error('هزینه تولید نامعتبر است');
+  if(extra>0&&!['1101','1102'].includes(o.extraMethod))throw Error('روش پرداخت هزینه تولید نامعتبر است');
+  const seen=new Set();for(const row of inputs){const n=q(row.qty),p=prod(row.pid);
+   if(!n||!p||seen.has(row.pid)||row.pid===o.pid||p.qty<n)throw Error('مقدار مواد اولیه کافی نیست');seen.add(row.pid)}
+  let target=o.pid&&prod(o.pid);
+  if(!target){if(!String(o.name||'').trim()||db.products.some(p=>p.name===o.name))throw Error('نام محصول جدید نامعتبر است');
+   target={id:uid(),name:o.name,brand:o.brand||'',barcode:'',unit:o.unit||'گرم',price:o.price||0,cost:0,qty:0,min:0,stockValue:0};db.products.push(target)}
+  if(seen.has(target.id))throw Error('محصول نمی‌تواند ماده اولیه خودش باشد');
+  let moved=0;for(const row of inputs)moved+=outgoing(prod(row.pid),q(row.qty));
+  if(extra)post(toJ(),'هزینه تولید '+target.name,[{a:'1104',d:extra},{a:o.extraMethod,c:extra}],uid());
+  incoming(target,output,moved+extra);
+  const ref=uid();target.lastOut=output;target.recipe=inputs.map(x=>({pid:x.pid,per:x.qty/output}));
+  (db.blends=db.blends||[]).push({id:ref,date:toJ(),pid:target.id,out:output,ing:inputs.map(x=>({pid:x.pid,qty:q(x.qty)})),raw:moved,extra,cost:Math.round((moved+extra)/output)});
+  return target.id
+ };
  const cash=parseInt;
  const readMoney=id=>{const x=en($(id).value).replace(/[\s٬،,]/g,'');return /^\d+$/.test(x)?Number(x):NaN};
  function purchaseEditor(id){const p=prod(id);if(!p)return toast('کالا پیدا نشد');
