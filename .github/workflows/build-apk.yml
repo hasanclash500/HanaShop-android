@@ -38,6 +38,7 @@ jobs:
           node t_management234.js
           node t_phase1.js
           node t_voice.js
+          node t_refunds_finance.js
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
