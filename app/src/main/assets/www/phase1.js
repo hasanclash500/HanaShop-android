@@ -40,8 +40,12 @@
   const gross=Math.round(next*l.price)-Math.round(old*l.price);
   const base=s.originalSub||s.sub+Math.round(old*l.price);
   const discount=s.originalDiscount??s.disc;
-  const cumulativeDiscount=Math.round(discount*Math.round(next*l.price)/Math.max(1,base));
-  const discShare=cumulativeDiscount-(l.retDiscount||0),net=gross-discShare;
+  // Allocate discounts across the entire invoice, not separately per line.
+  // This preserves the original total even when many small lines are refunded.
+  const returnedBefore=base-s.sub,returnedAfter=returnedBefore+gross;
+  const discountBefore=discount-s.disc;
+  const cumulativeDiscount=Math.round(discount*returnedAfter/Math.max(1,base));
+  const discShare=cumulativeDiscount-discountBefore,net=gross-discShare;
   if(!goodMoney(net))throw Error('مبلغ مرجوعی نامعتبر است');
   if(method==='1103'&&(s.total-s.paid)<net)throw Error('مانده فاکتور کمتر از برگشتی است');
   if(method!=='1103'&&s.paid<net)throw Error('مبلغ دریافتی کمتر از برگشتی است');
