@@ -1,0 +1,31 @@
+// Finance/returns regression with synthetic customer and quantities, never live store data.
+const fs=require('fs'),{boot}=require('./harness');
+const A=boot('app.js'),R=s=>A.run(s);
+for(const file of ['business.js','phase1.js','management234.js'])R(fs.readFileSync(file,'utf8'));
+R('ensureDefaults();render=function(){};modal=function(){};showInv=function(){}');
+let pass=0,fail=0;
+function check(name,value){console.log((value?'PASS ':'FAIL ')+name);if(value)pass++;else fail++}
+const isBalanced=()=>R("db.journal.every(j=>j.lines.reduce((a,l)=>a+(l.d||0)-(l.c||0),0)===0)&&bal('1104')===db.products.reduce((a,p)=>a+HanaPhase1.stockValue(p),0)");
+const pa=R("mkProduct({name:'عطر آزمایشی A',unit:'گرم',qty:10,cost:50,price:100,min:1})");
+const pb=R("mkProduct({name:'عطر آزمایشی B',unit:'میلی‌لیتر',qty:10,cost:50,price:100,min:1})");
+const inv=R("mkSale([{pid:'"+pa+"',n:1,price:100},{pid:'"+pb+"',n:1,price:100}],'',1,199,'1101')");
+check('two-line discounted sale',R("db.sales.find(s=>s.id==='"+inv+"').total")===199);
+check('balanced after sale',isBalanced());
+R("mkReturn('"+inv+"',0,1,'1101','ok')");
+check('first full-line return leaves exact remaining',R("db.sales.find(s=>s.id==='"+inv+"').total")===100);
+R("mkReturn('"+inv+"',1,1,'1101','ok')");
+check('entire sale refunded without 1-toman rounding residue',R("db.sales.find(s=>s.id==='"+inv+"').total")===0);
+check('original discount fully returned',R("db.sales.find(s=>s.id==='"+inv+"').disc")===0);
+check('cash refunded exactly',R("bal('1101')")===0);
+check('stock quantities restored',R("prod('"+pa+"').qty===10&&prod('"+pb+"').qty===10"));
+check('COGS zero after good returns',R('HanaManagement234.kpis().cogs')===0);
+check('journal, stock value balances',isBalanced());
+const invBad=R("mkSale([{pid:'"+pa+"',n:0.5,price:100}],'',0,50,'1101')");
+R("mkReturn('"+invBad+"',0,0.5,'1101','bad')");
+check('damaged return never re-enters stock',R("prod('"+pa+"').qty")===9.5);
+check('damaged return keeps COGS in ledger',R("bal('5101')")===25);
+check('management COGS matches ledger',R('HanaManagement234.kpis().cogs')===25);
+check('per-product loss includes damaged goods',R("HanaBusiness.itemProfit().rows.some(x=>x.pid==='"+pa+"'&&x.profit===-25)"));
+check('reports respect audit',isBalanced());
+console.log('RETURNS FINANCE TESTS '+pass+' passed, '+fail+' failed');
+if(fail)process.exitCode=1;
