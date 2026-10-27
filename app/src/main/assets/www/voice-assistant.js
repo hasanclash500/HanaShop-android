@@ -22,7 +22,7 @@
    const result=choose(db.customers,who);
    return reply(result.ambiguous?'چند مشتری با این نام پیدا شد؛ نام کامل‌تری بگویید.':result.value?'مانده حساب '+result.value.name+': '+money(cDebt(result.value.id)):'این مشتری پیدا نشد. نام کامل پرونده را بگویید.');
   }
-  const productQuery=fromPhrase(['موجودی ','چقدر از ','قیمت ','قیمت فروش ','قیمت خرید ','از ']).replace(/(چقدر دارم|چنده|چقدر است|دارم)$/,'').trim();
+  const productQuery=fromPhrase(['موجودی ','چقدر از ','قیمت فروش ','قیمت خرید ','قیمت ','از ']).replace(/(چقدر دارم|چنده|چقدر است|دارم)$/,'').trim();
   if(productQuery){
    const result=choose(db.products,productQuery);
    if(result.ambiguous)return reply('چند کالا با این نام وجود دارد؛ نام دقیق‌تر بگویید.');
