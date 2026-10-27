@@ -30,6 +30,8 @@ jobs:
           cp ../app/src/main/assets/www/management234.js ./management234.js
           cp ../app/src/main/assets/www/phase1.js ./phase1.js
           cp ../app/src/main/assets/www/voice-assistant.js ./voice-assistant.js
+          cp ../app/src/main/assets/www/assistant-v2.js ./assistant-v2.js
+          cp ../app/src/main/assets/www/customer-actions.js ./customer-actions.js
           node reg.js app.js
           node t_ui.js
           node t_pages.js
@@ -38,6 +40,7 @@ jobs:
           node t_management234.js
           node t_phase1.js
           node t_voice.js
+          node t_assistant_v2.js
           node t_refunds_finance.js
 
       - name: Set up Java 17
