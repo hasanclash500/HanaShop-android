@@ -9,6 +9,9 @@ import android.provider.Settings;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.speech.RecognizerIntent;
+import org.json.JSONObject;
+import java.util.ArrayList;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -47,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private WebView web;
     private ValueCallback<Uri[]> chooser;
     private ActivityResultLauncher<Intent> pick;
+    private ActivityResultLauncher<Intent> speechPicker;
     private ActivityResultLauncher<String> askNotificationPermission;
 
     @Override protected void onCreate(Bundle b) {
@@ -54,6 +58,17 @@ public class MainActivity extends AppCompatActivity {
         askNotificationPermission = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
             if (granted && web != null) web.evaluateJavascript("window.syncPhoneAlerts&&syncPhoneAlerts()", null);
             if (!granted) toast("برای اعلان تولد و یادآوری، مجوز اعلان را فعال کنید");
+        });
+        speechPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            Intent data = result.getData();
+            if (result.getResultCode() == RESULT_OK && data != null) {
+                ArrayList<String> matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                if (matches != null && !matches.isEmpty() && matches.get(0) != null && !matches.get(0).trim().isEmpty()) {
+                    notifyVoice("onResult", matches.get(0));
+                    return;
+                }
+            }
+            notifyVoice("onError", "چیزی شنیده نشد؛ دوباره امتحان کنید یا تایپ کنید.");
         });
         web = new WebView(this);
         setContentView(web);
@@ -115,10 +130,32 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); web.saveState(o); }
 
+    private void notifyVoice(String method, String text) {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                "window.HanaVoice&&window.HanaVoice." + method + "(" + JSONObject.quote(text) + ")", null);
+        });
+    }
+
     private void toast(String m) { runOnUiThread(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show()); }
     private static String safe(String n) { String r = n == null ? "file" : n.replaceAll("[\\\\/:*?\"<>|]", "_"); return r.isEmpty() ? "file" : r; }
 
     private class Bridge {
+        @JavascriptInterface public void startVoiceRecognition() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
+                    i.putExtra(RecognizerIntent.EXTRA_PROMPT, "سؤال یا دستور فروشگاه را بگویید");
+                    i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                    speechPicker.launch(i);
+                } catch (Exception e) {
+                    notifyVoice("onError", "سرویس تشخیص گفتار روی گوشی در دسترس نیست. سؤال را تایپ کنید.");
+                }
+            });
+        }
+
         @JavascriptInterface public void syncNotifications(String json) {
             try { NotificationScheduler.sync(MainActivity.this, json); }
             catch (Exception e) { toast("برنامه‌ریزی اعلان ممکن نشد: " + e.getMessage()); }
