@@ -1,0 +1,48 @@
+// Persian assistant V2 tests. All customers and transactions are synthetic.
+const fs=require('fs'),{boot}=require('./harness');
+const A=boot('app.js'),R=s=>A.run(s);
+for(const file of ['business.js','phase1.js','management234.js','voice-assistant.js','customer-actions.js','assistant-v2.js'])
+ R(fs.readFileSync(file,'utf8'));
+R("ensureDefaults()");
+let ok=0,fail=0;
+function test(name,result){(result?ok++:fail++);console.log((result?'PASS ':'FAIL ')+name)}
+const p=R("mkProduct({name:'کرید اونتوس',unit:'گرم',qty:70.375,cost:42000,price:126000,min:10})");
+const pb=R("mkProduct({name:'باکارات رژ',unit:'میلی‌لیتر',qty:18.5,cost:12000,price:30000,min:20})");
+R("db.customers.push({id:'customer-1',name:'رضا اکبری',phone:'09120000000',promo:false})");
+R("db.customers.push({id:'customer-2',name:'پرهام فکری',phone:'09360000000',promo:true})");
+let s=R("HanaVoice.handle('از کرید اونتوس چقدر دارم؟')");
+test('inventory named product',s.includes('۷۰.۳۷۵')&&s.includes('کرید اونتوس'));
+s=R("HanaVoice.handle('اونتوس چقدر مونده؟')");
+test('colloquial inventory phrase',s.includes('۷۰.۳۷۵'));
+s=R("HanaVoice.handle('قیمتش چنده؟')");
+test('conversational followup remembers product',s.includes('۱۲۶,۰۰۰'));
+s=R("HanaVoice.handle('چند میل از باکارات رژ موجوده؟')");
+test('milliliter product recognized',s.includes('۱۸.۵'));
+s=R("HanaVoice.handle('قیمت خرید باکارات رژ')");
+test('buy price intent recognized',s.includes('۱۲,۰۰۰'));
+s=R("HanaVoice.handle('بدهی رضا اکبری چقدره؟')");
+test('customer account without exact prefix',s.includes('رضا اکبری')&&s.includes('۰ تومان'));
+s=R("HanaVoice.handle('شماره اش چیه؟')");
+test('followup does not guess unnamed customer phone',!s.includes('09120000000'));
+s=R("HanaVoice.handle('شماره رضا اکبری')");
+test('customer contact query',s.includes('09120000000'));
+s=R("HanaVoice.handle('امروز چقدر فروختم؟')");
+test('sales question conversational',s.includes('فروش امروز'));
+s=R("HanaVoice.handle('سود این ماه چقدره؟')");
+test('monthly profit',s.includes('سود خالص'));
+s=R("HanaVoice.handle('کالاهای کم موجود کدوما هستن؟')");
+test('low stock questions',s.includes('باکارات'));
+s=R("HanaVoice.handle('موجودی صندوق چقدره؟')");
+test('cash balance',s.includes('صندوق'));
+s=R("HanaVoice.handle('چند تا مشتری دارم؟')");
+test('customer count',s.includes('۲'));
+s=R("HanaVoice.handle('تولدهای امروز')");
+test('birthday query',s.includes('تولد'));
+s=R("HanaVoice.handle('ثبت خرید ۵۰ گرم اونتوس')");
+test('transaction request gated',s.includes('تأیید'));
+test('command does not touch ledger',R('db.purchases.length')===0);
+test('mobile phone normalization',R("HanaCustomerActions.waPhone({phone:'۰۹۱۲۰۰۰۰۰۰۰'})")==='');
+test('valid Iranian mobile to WhatsApp',R("HanaCustomerActions.waPhone({phone:'09120000000'})")==='989120000000');
+test('new assistant available globally',R("HanaVoice.version")===2);
+console.log('ASSISTANT V2 TESTS '+ok+' passed, '+fail+' failed');
+if(fail)process.exitCode=1;
