@@ -124,7 +124,7 @@
  stockAdjust=function(id){const p=prod(id);modal('<h3>شمارش موجودی — '+esc(p.name)+'</h3><div class="card">موجودی: '+fa(p.qty)+' '+esc(p.unit)+'</div><label>موجودی واقعی</label><input id="n" inputmode="decimal" value="'+p.qty+'"><label>دلیل</label><select id="r"><option>انبارگردانی</option><option>ضایعات</option><option>اصلاح اشتباه</option></select><div class="err" id="e"></div><button class="b" id="ok">ثبت</button><button class="b s" id="no">لغو</button>');
   $('#no').onclick=close;$('#ok').onclick=async()=>{const n=parse($('#n').value);if(!Number.isFinite(n))return $('#e').textContent='مقدار نامعتبر';if(await tx(()=>mkAdjust(id,n,$('#r').value))){close();render()}}
  };
- const previousSale=R.sale;R.sale=function(){previousSale();const a=$('#add');if(a&&$('#sn'))a.onclick=()=>{const p=typeof saleSel!=='undefined'?prod(saleSel):prod($('#sp')?.value),n=parse($('#sn').value);
+ const previousSale=R.sale;R.sale=function(){previousSale();const field=$('#sn');if(field)field.setAttribute('inputmode','decimal');const a=$('#add');if(a&&$('#sn'))a.onclick=()=>{const p=typeof saleSel!=='undefined'?prod(saleSel):prod($('#sp')?.value),n=parse($('#sn').value);
   if(!p||!Number.isFinite(n)||n<=0)return $('#e').textContent='مقدار نامعتبر';cart.push({pid:p.id,n,price:p.price});if(typeof saleSel!=='undefined')saleSel='';R.sale()}};
  finishSale=async function(){if(!cart.length)return $('#e').textContent='سبد خالی';
   const sub=cart.reduce((a,l)=>a+Math.round(l.n*l.price),0),disc=readMoney('#sd');
