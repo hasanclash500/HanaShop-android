@@ -89,7 +89,7 @@
    '@media print{body{background:#fff!important}.hana-premium-invoice{padding:8mm!important;max-width:none!important}.hana-premium-invoice tr{break-inside:avoid}.hana-premium-invoice .p-inv-box{break-inside:avoid}.hana-premium-invoice .p-inv-signs{break-inside:avoid}}'+
    '</style>'+
    (cfg.showBasmalah?'<div class="p-inv-basmala">باسمه تعالی</div>':'')+
-   sellerHeader+'<div class="p-inv-heading">'+(isFormal?'فاکتور رسمی فروش':'فاکتور فروش')+'</div>'+
+   sellerHeader+'<div class="p-inv-heading">'+(isFormal?'فاکتور رسمی فروش':escp(cfg.title||'فاکتور فروش'))+'</div>'+
    (isFormal?'<div class="p-inv-panels"><section class="p-inv-box"><div class="p-inv-panel-title">مشخصات فروشنده</div><div class="p-inv-panel-body">'+sellerFields+'</div></section>'+
       '<section class="p-inv-box"><div class="p-inv-panel-title">مشخصات خریدار</div><div class="p-inv-panel-body">'+buyerFields+'</div></section></div>':
       '<div class="p-inv-box">'+contact('خریدار',c.name||'عمومی')+(c.phone?' | '+contact('شماره تماس',c.phone):'')+'</div>')+
@@ -141,7 +141,7 @@
   drawText(x,'تاریخ: '+fa(s.date),margin+9,top+56,'left',12,formal?'#24354f':'#fff');
   const logo=await loadImg(c.logo);
   if(logo){const width=64,height=68;drawBox(x,W-margin-width-8,top+11,width,height,'#fff');x.drawImage(logo,W-margin-width-5,top+13,width-6,height-4)}
-  drawText(x,formal?'فاکتور رسمی فروش':'فاکتور فروش',W/2,top+headH+33,'center',19,col,true);
+  drawText(x,formal?'فاکتور رسمی فروش':(c.title||'فاکتور فروش'),W/2,top+headH+33,'center',19,col,true);
   if(formal){
    const by=top+headH+52,half=(rw-10)/2,pw=half;
    drawBox(x,margin,by,pw,114,'#fff',border);drawBox(x,margin+pw+10,by,pw,114,'#fff',border);
