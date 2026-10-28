@@ -66,7 +66,7 @@ function canonicalCustomerIds(source){
   if(Array.isArray(c.recips))c.recips.forEach(r=>change(r,'cid'))
  });
  if(Array.isArray(data.cheques))data.cheques.forEach(c=>{
-  if(seen.has(key(c.party)))change(c,'party');
+  if(c.type==='in'&&seen.has(key(c.party)))change(c,'party');
  });
  return{data,changed};
 }
