@@ -37,8 +37,56 @@ const blank=()=>({version:VER,savedAt:0,shop:{name:'گالری عطر حنا',ow
  tpl:{birthday:'{name} عزیز، تولدت مبارک! 🎊 هدیه‌ای از طرف {storeName} منتظر توست.',thanks:'{name} عزیز، ممنون از خرید شما از {storeName}.',repurchase:'{name} عزیز، اگر عطر خریداری‌شده در {purchaseDate} تمام شده، {storeName} آماده‌ی پذیرایی است.',bulk:'سلام {name} عزیز، پیام ویژه از {storeName}.'},
  theme:'light',allowNegStock:false,lastBackup:0});
 let db=blank();
+/* Legacy CRM records used numeric customer IDs, but DOM and select values are strings.
+ * Convert identities AND known foreign keys together, never names/phones/ledger amounts.
+ * Operates on a detached clone and refuses ambiguous numeric/string ID collisions. */
+function canonicalCustomerIds(source){
+ const data=JSON.parse(JSON.stringify(source)),seen=new Set();
+ if(!Array.isArray(data.customers))return{data,changed:false};
+ const key=v=>typeof v==='number'&&Number.isSafeInteger(v)?String(v):v;
+ for(const c of data.customers){
+  if(!c||!(typeof c.id==='string'||Number.isSafeInteger(c.id))||c.id==='')
+   throw new Error('شناسه مشتری در پشتیبان نامعتبر است.');
+  const k=key(c.id);
+  if(seen.has(k))throw new Error('شناسه مشتری تکراری/مبهم است؛ مهاجرت خودکار متوقف شد.');
+  seen.add(k);
+ }
+ let changed=false;
+ const change=(row,field)=>{
+  if(row&&typeof row[field]==='number'&&Number.isSafeInteger(row[field])){
+   row[field]=String(row[field]);changed=true
+  }
+ };
+ data.customers.forEach(c=>change(c,'id'));
+ for(const field of ['sales','payments','points','reminders','comms']){
+  if(Array.isArray(data[field]))data[field].forEach(r=>change(r,'cid'));
+ }
+ // Campaign recipients may also refer to customers from legacy imports.
+ if(Array.isArray(data.campaigns))data.campaigns.forEach(c=>{
+  if(Array.isArray(c.recips))c.recips.forEach(r=>change(r,'cid'))
+ });
+ if(Array.isArray(data.cheques))data.cheques.forEach(c=>{
+  if(seen.has(key(c.party)))change(c,'party');
+ });
+ return{data,changed};
+}
+const customerIdEqual=(a,b)=>a!==null&&a!==undefined&&b!==null&&b!==undefined&&String(a)===String(b);
 const IDB=()=>new Promise((res,rej)=>{const r=indexedDB.open('shopdb',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
-async function load(){try{const d=await IDB();const v=await new Promise((res,rej)=>{const q=d.transaction('kv').objectStore('kv').get('db');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});if(v){db=Object.assign(blank(),v);if(!db.accounts.some(a=>a[0]==='3102'))db.accounts.push(['3102','سود و زیان انباشته'])}}catch(e){toast('خطا در خواندن پایگاه داده: '+e.message)}}
+async function load(){try{const d=await IDB();const v=await new Promise((res,rej)=>{const q=d.transaction('kv').objectStore('kv').get('db');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});if(v){
+  const fix=canonicalCustomerIds(v);
+  if(fix.changed){
+   // Atomic safety snapshot + upgraded DB: if either write fails, neither applies.
+   await new Promise((res,rej)=>{
+    const t=d.transaction('kv','readwrite');
+    const st=t.objectStore('kv');
+    st.put(v,'pre-customer-id-migration-v1');
+    st.put(fix.data,'db');
+    t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)
+   });
+  }
+  db=Object.assign(blank(),fix.data);
+  if(!db.accounts.some(a=>a[0]==='3102'))db.accounts.push(['3102','سود و زیان انباشته'])
+ }}catch(e){toast('خطا در مهاجرت یا خواندن پایگاه داده: '+e.message)}}
 async function save(){db.savedAt=Date.now();try{const d=await IDB();await new Promise((res,rej)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(JSON.parse(JSON.stringify(db)),'db');t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){toast('ذخیره ناموفق بود! '+e.message);return false}}
 /* اجرای اتمی: روی نسخهٔ کپی کار می‌کند؛ در صورت خطا هیچ تغییری باقی نمی‌ماند */
 let txBusy=false;
@@ -52,10 +100,10 @@ const balP=(code,from)=>db.journal.reduce((s,j)=>s+(from&&j.date<from?0:j.lines.
 const bal=code=>db.journal.reduce((s,j)=>s+j.lines.filter(l=>l.a===code).reduce((x,l)=>x+(l.d||0)-(l.c||0),0),0);
 const accName=c=>(db.accounts.find(a=>a[0]===c)||[c,c])[1];
 /* ===== مشتری ===== */
-const cust=id=>db.customers.find(c=>c.id===id),prod=id=>db.products.find(p=>p.id===id);
-const cSales=id=>db.sales.filter(s=>s.cid===id&&s.status!=='cancel');
+const cust=id=>db.customers.find(c=>customerIdEqual(c.id,id)),prod=id=>db.products.find(p=>p.id===id);
+const cSales=id=>db.sales.filter(s=>customerIdEqual(s.cid,id)&&s.status!=='cancel');
 const cDebt=id=>cSales(id).reduce((s,x)=>s+x.total-x.paid,0);
-const cPoints=id=>db.points.filter(p=>p.cid===id).reduce((s,p)=>s+p.n,0);
+const cPoints=id=>db.points.filter(p=>customerIdEqual(p.cid,id)).reduce((s,p)=>s+p.n,0);
 const level=pt=>db.loyalty.levels.slice().reverse().find(l=>pt>=l[1])[0];
 /* ===== رابط ===== */
 const $=s=>document.querySelector(s),V=$('#view');let tab='dash',q='';
@@ -104,7 +152,7 @@ function custForm(id){const c=cust(id)||{};const d=modal(`<h3>${id?'ویرایش
  $('#no').onclick=close;$('#ok').onclick=async()=>{const name=$('#fn').value.trim(),ph=normPhone($('#fp').value),b=$('#fb').value.trim(),E=$('#fe');
  if(!name)return E.textContent='نام الزامی است.';if(!ph)return E.textContent='شمارهٔ موبایل معتبر نیست.';
  if(b&&!validJ(b))return E.textContent='تاریخ تولد معتبر نیست.';
- const dup=db.customers.find(x=>x.phone===ph&&x.id!==id);if(dup&&!confirm('این شماره برای «'+dup.name+'» ثبت شده است. باز هم ذخیره شود؟'))return;
+ const dup=db.customers.find(x=>x.phone===ph&&!customerIdEqual(x.id,id));if(dup&&!confirm('این شماره برای «'+dup.name+'» ثبت شده است. باز هم ذخیره شود؟'))return;
  if(await tx(()=>{const o=id?cust(id):{id:uid(),created:toJ()};Object.assign(o,{name,phone:ph,birth:b?normJ(b):'',note:$('#fnote').value,promo:$('#fpr').checked});if(!id)db.customers.push(o)})){close();toast('ذخیره شد');render()}}}
 /* --- کالا --- */
 R.stock=()=>{const list=db.products.filter(p=>!q||p.name.includes(q)||(p.barcode||'').includes(en(q)));
@@ -181,14 +229,15 @@ function migrateOld(j){const rep=planOld(j);const have=new Set(db.customers.map(
  /* مانده‌های افتتاحیه به‌صورت سند متوازن ثبت می‌شوند تا مطالبات و موجودی با حسابداری هماهنگ باشند */
  if(debt>0)post(toJ(),'مانده افتتاحیه مطالبات (مهاجرت)',[{a:'1103',d:debt},{a:'3101',c:debt}],'legacy');
  if(stockVal>0)post(toJ(),'موجودی افتتاحیه کالا (مهاجرت)',[{a:'1104',d:stockVal},{a:'3101',c:stockVal}],'legacy');
+ const normalized=canonicalCustomerIds(db);if(normalized.changed)db=Object.assign(blank(),normalized.data);
  rep.skipped=skipped;return rep}
 function readFile(f,mode){if(!f)return;const r=new FileReader();r.onerror=()=>toast('خواندن فایل ممکن نشد.');r.onload=async()=>{let j;try{j=JSON.parse(r.result)}catch{return toast('فایل JSON معتبر نیست.')}
  if(j&&j.kind==='partial')return importPartial(j);
  const isNew=!!j&&typeof j==='object'&&(Object.prototype.hasOwnProperty.call(j,'journal')||Object.prototype.hasOwnProperty.call(j,'shop')||Object.prototype.hasOwnProperty.call(j,'sales'));
- if(isNew){const err=verifyFullBackup(j);if(err)return toast('بازیابی متوقف شد: '+err);const bad=(j.sales||[]).filter(s=>s.cid&&!j.customers.some(c=>c.id===s.cid)).length;
+ if(isNew){const err=verifyFullBackup(j);if(err)return toast('بازیابی متوقف شد: '+err);const bad=(j.sales||[]).filter(s=>s.cid&&!j.customers.some(c=>customerIdEqual(c.id,s.cid))).length;
   if(!confirm(`بازیابی کامل: ${j.customers.length} مشتری، ${(j.products||[]).length} کالا، ${(j.sales||[]).length} فاکتور، ${j.journal.length} سند.\n${bad?bad+' فاکتور به مشتری ناموجود اشاره دارد.\n':''}داده‌های فعلی جایگزین می‌شوند (نسخهٔ خودکار ذخیره می‌شود). ادامه؟`))return;
   try{await saveSafetyCopy('auto-before-restore.json')}catch(e){return toast('بازیابی لغو شد؛ نسخهٔ ایمنی ذخیره نشد: '+e.message)}
-  return tx(()=>{db=Object.assign(blank(),j)}).then(ok=>{if(ok){toast('بازیابی انجام شد');render()}else toast('بازیابی کامل نشد')})}
+  return tx(()=>{db=Object.assign(blank(),canonicalCustomerIds(j).data)}).then(ok=>{if(ok){toast('بازیابی انجام شد');render()}else toast('بازیابی کامل نشد')})}
  if(!Array.isArray(j.customers))return toast('ساختار فایل شناخته نشد.');
  const p=planOld(j);
  const msg=`فایل CRM قدیمی (نسخه ${j.version||'؟'}):\n• ${p.total} مشتری (${p.already} قبلاً وارد شده)\n• ${p.purchases} خرید، ${p.perfumes} عطر، ${p.reminders} یادآوری\n• مانده بدهی خریدها: ${T(p.debt)}${p.over?`\n  ⚠ ${p.over} خرید دارای مانده بیشتر از مبلغ خرید است؛ مانده بدهی کامل ثبت می‌شود و خرید با علامت «ناهمخوان» نگه داشته می‌شود.`:''}${p.debt!==p.custDebt?`\n  ⚠ جمع مانده‌های ثبت‌شده روی مشتری‌ها ${T(p.custDebt)} است.`:''}\n• ${p.dupGroups} گروه مشتری با شمارهٔ تکراری (هیچ‌کدام حذف یا ادغام نمی‌شوند؛ فقط نشان‌گذاری می‌شوند)\n• ${p.orphanRem} یادآوری بدون مشتری مرتبط (با نام ذخیره‌شده وارد می‌شوند)\n• شمارهٔ نامعتبر: ${p.badPhone.length}\nادامه می‌دهید؟ (قبل از ورود یک نسخهٔ پشتیبان دانلود می‌شود)`;
@@ -745,7 +794,7 @@ G.json=function(){const ago=db.lastBackup?fa(Math.round((Date.now()-db.lastBacku
 function mkImportPartial(j){const d=j.data;if(!Array.isArray(d))throw new Error('ساختار فایل نامعتبر است.');let add=0,skip=0;
  if(j.section==='customers'){const ids=new Set(db.customers.map(c=>c.id));d.forEach(c=>{if(!c||!c.id||!c.name||ids.has(c.id)){skip++;return}const dup=db.customers.some(x=>x.phone===c.phone);db.customers.push({...c,dupPhone:dup||c.dupPhone});ids.add(c.id);add++})}
  else if(j.section==='products'){const ids=new Set(db.products.map(p=>p.id));let opening=0;d.forEach(p=>{if(!p||!p.id||!p.name||ids.has(p.id)){skip++;return}const qty=p.qty||0,cost=p.cost||0;if(!Number.isSafeInteger(qty)||qty<0||!Number.isSafeInteger(cost)||cost<0||!Number.isSafeInteger(qty*cost))throw new Error('مقدار یا بهای کالای ورودی نامعتبر است.');db.products.push({...p,qty,cost});opening+=qty*cost;ids.add(p.id);add++});if(opening>0)post(toJ(),'موجودی افتتاحیه کالاهای واردشده از JSON',[{a:'1104',d:opening},{a:'3101',c:opening}],'partial-products')}
- else throw new Error('بخش «'+j.section+'» پشتیبانی نمی‌شود.');return{add,skip}}
+ else throw new Error('بخش «'+j.section+'» پشتیبانی نمی‌شود.');if(j.section==='customers'){const normalized=canonicalCustomerIds(db);if(normalized.changed)db=Object.assign(blank(),normalized.data)}return{add,skip}}
 function importPartial(j){if(!confirm(`ورود ${j.section==='customers'?'مشتریان':'کالاها'}: ${(j.data||[]).length} رکورد. موارد با شناسه‌ی تکراری رد می‌شوند و داده‌ی فعلی تغییر نمی‌کند. ادامه؟`))return;let r;tx(()=>{r=mkImportPartial(j)}).then(ok=>{if(ok){toast(`وارد شد: ${r.add} · ردشده: ${r.skip}`);render()}})}
 G.clear=function(){modal(`<h3>پاک کردن اطلاعات</h3><div class="err">این کار همه‌ی مشتریان، کالاها، فاکتورها، اسناد و تراکنش‌ها را پاک می‌کند. قبل از پاک‌سازی یک فایل پشتیبان JSON ذخیره می‌شود.</div>
  <label><input type="checkbox" id="ks" style="width:auto;min-height:0" checked> تنظیمات فروشگاه، قالب پیام‌ها، دسته‌ها و فهرست حساب‌ها حفظ شود</label><label>برای تأیید، کلمه‌ی «پاک» را بنویسید</label><input id="cf1"><div class="err" id="e"></div><button class="b d" id="ok">پاک کردن</button><button class="b s" id="no">لغو</button>`);$('#no').onclick=close;
