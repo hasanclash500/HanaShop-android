@@ -34,6 +34,7 @@ jobs:
           cp ../app/src/main/assets/www/customer-actions.js ./customer-actions.js
           cp ../app/src/main/assets/www/invoice-studio.js ./invoice-studio.js
           cp ../app/src/main/assets/www/invoice-premium.js ./invoice-premium.js
+          cp ../app/src/main/assets/www/invoice-actions.js ./invoice-actions.js
           cp ../app/src/main/assets/www/voice-workflows.js ./voice-workflows.js
           node reg.js app.js
           node t_ui.js
@@ -48,6 +49,7 @@ jobs:
           node t_legacy_customer_ids.js
           node t_invoice_voice_forms.js
           node t_invoice_premium.js
+          node t_invoice_actions.js
           node t_refunds_finance.js
 
       - name: Set up Java 17
@@ -84,10 +86,10 @@ jobs:
       # Isolated trial package so existing shop data survives signature changes.
       - name: Build separate test app
         run: |
-          sed -i "s/applicationId 'com.hana.shop'/applicationId 'com.hana.shop.trial.formal2026'/" app/build.gradle
-          sed -i 's#android:label="@string/app_name"#android:label="حنا فاکتور شکیل"#' app/src/main/AndroidManifest.xml
-          grep -q "applicationId 'com.hana.shop.trial.formal2026'" app/build.gradle
-          grep -q 'android:label="حنا فاکتور شکیل"' app/src/main/AndroidManifest.xml
+          sed -i "s/applicationId 'com.hana.shop'/applicationId 'com.hana.shop.trial.invoicefix2026'/" app/build.gradle
+          sed -i 's#android:label="@string/app_name"#android:label="حنا فاکتور اصلاح‌شده"#' app/src/main/AndroidManifest.xml
+          grep -q "applicationId 'com.hana.shop.trial.invoicefix2026'" app/build.gradle
+          grep -q 'android:label="حنا فاکتور اصلاح‌شده"' app/src/main/AndroidManifest.xml
           gradle --no-daemon clean assembleDebug
 
       - name: Upload isolated test APK
