@@ -32,7 +32,7 @@
   for(const label of labels){
    const i=s.indexOf(label);if(i<0)continue;
    const t=s.slice(i+label.length).trim().replace(/^هر\s+(گرم|میل|عدد)\s*/,'');
-   const m=t.match(/^([0-9۰-۹٠-٩][0-9۰-۹٠-٩,،٬.٫]*|[آ-ی]+(?: و [آ-ی]+){0,6}(?: هزار| میلیون)?)/);
+   const m=t.match(/^([0-9۰-۹٠-٩][0-9۰-۹٠-٩,،٬.٫]*(?:\s*(?:هزار|میلیون))?|[آ-ی]+(?: و [آ-ی]+){0,6}(?: هزار| میلیون)?)/);
    if(m){const v=spokenNumber(m[1]);if(v!==null)return v}
   }
   return null;
