@@ -164,17 +164,5 @@
   $('#ifsTxt').onclick=()=>run(async()=>{await dlf(name()+'.txt',invText(s),'text/plain;charset=utf-8');toast('فایل متنی ذخیره شد')});
   $('#ifsEditDesign').onclick=settings;
  };
- // Correct page geometry for added A5 print/PDF option.
- const oldPdf=pdfFromJpeg;
- pdfFromJpeg=function(bytes,w,h,format){
-  if(format!=='a5')return oldPdf(bytes,w,h,format);
-  // The common PDF stream builder uses its thermal width for unknown formats;
-  // for A5 use a geometry-preserving scale by supplying an A4 image then
-  // patching only the emitted MediaBox and image transform to A5.
-  const pdfBytes=oldPdf(bytes,w,h,'a4'),text=new TextDecoder('latin1').decode(pdfBytes);
-  // Never patch compressed image byte sequences. Instead use regular A4 output for A5
-  // download when the exact A5 generator is not active.
-  return pdfBytes;
- };
  globalThis.HanaInvoiceStudio={config,html,csv,documentHtml,settings,canvas,pdf,rows,safeImg,validFormat};
 })();
