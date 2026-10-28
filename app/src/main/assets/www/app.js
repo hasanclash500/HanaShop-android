@@ -962,7 +962,7 @@ async function qsCommit(q,method,cid=''){const credit=method==='credit',lines=Ob
  return await tx(()=>{id=mkSale(lines,cid,0,credit?0:t,credit?'1101':method)})?id:null}
 G.qs=function(){const q={};let m='1101',s='',cid='';
  const tot=()=>Object.entries(q).reduce((a,[id,n])=>a+n*prod(id).price,0),cnt=()=>Object.values(q).reduce((a,b)=>a+b,0);
- const bar=()=>{$('#qt').textContent=T(tot());$('#qc2').textContent=fa(cnt())+' قلم';$('#qok').disabled=!cnt()};
+ const bar=()=>{$('#qt').textContent=T(tot());$('#qc2').textContent=fa(cnt())+' قلم';$('#qok').disabled=!cnt();$('#qprint').disabled=!cnt()};
  const tiles=()=>{const L=db.products.filter(p=>p.active!==false&&(db.allowNegStock||p.qty>0)&&(!s||nz(p.name+' '+(p.brand||'')).includes(nz(s))));
   $('#qg').innerHTML=L.map(p=>{const n=q[p.id]||0,u=esc(p.unit||'');return `<div class="qt ${n?'on':''}"><button data-a="add" data-id="${p.id}"><b>${esc(p.name)}</b><span>${T(p.price)} / ${u}</span><small>موجودی ${fa(p.qty)} ${u}</small></button>${n?`<div class="qn"><button data-a="sub" data-id="${p.id}" aria-label="کم کردن">−</button><input class="qin" inputmode="numeric" data-id="${p.id}" value="${n}" aria-label="مقدار (${u})"><button data-a="add" data-id="${p.id}" aria-label="اضافه کردن">+</button></div>${p.unit==='گرم'?`<div class="qch">${[5,10,20,50,100].map(v=>`<button data-a="inc" data-id="${p.id}" data-v="${v}">+${fa(v)}</button>`).join('')}</div>`:''}<div class="qlt">جمع: <b id="lt-${p.id}">${T(n*p.price)}</b></div>`:''}</div>`}).join('')||'<div class="k">کالایی پیدا نشد.</div>';
   bar();
@@ -971,12 +971,13 @@ G.qs=function(){const q={};let m='1101',s='',cid='';
   if(!c)$('#qcq').oninput=e=>{$('#qcr').innerHTML=e.target.value.trim()?findCust(e.target.value).slice(0,6).map(x=>`<button class="lr" data-a="pc" data-id="${x.id}"><span>${esc(x.name)}</span><small>${esc(x.phone||'')}</small></button>`).join('')||'<div class="k">مشتری پیدا نشد.</div>':''};
   $('#qm3').style.display=c?'':'none';if(!c&&m==='credit')m='1101'};
  modal(`<h3>فروش سریع</h3><div id="qcu"></div><input id="qs0" placeholder="جست‌وجوی کالا" autocomplete="off"><div class="qs" id="qg"></div>
- <div class="qb"><div><div class="v" id="qt"></div><div class="k" id="qc2"></div></div><div class="seg"><button id="qm1" data-a="m1101">نقد</button><button id="qm2" data-a="m1102">کارت</button><button id="qm3" data-a="mcredit">نسیه</button></div><button class="b" id="qok" data-a="ok">ثبت فاکتور</button><button class="b s" data-a="no">بستن</button></div>`);
+ <div class="qb"><div><div class="v" id="qt"></div><div class="k" id="qc2"></div></div><div class="seg"><button id="qm1" data-a="m1101">نقد</button><button id="qm2" data-a="m1102">کارت</button><button id="qm3" data-a="mcredit">نسیه</button></div><div class="qs-save-actions"><button class="b s" id="qprint" data-a="print">🖨️ فقط پرینت</button><button class="b" id="qok" data-a="ok">✅ ثبت فاکتور</button></div><div class="k" style="width:100%">فقط پرینت = پیش‌فاکتور بدون ثبت در حسابداری یا کسر موجودی · ثبت فاکتور = ذخیره قطعی فروش</div><button class="b s" data-a="no">بستن</button></div>`);
  $('#qs0').oninput=e=>{s=e.target.value;tiles()};
  $('#dlg').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,p=prod(b.dataset.id);
   if(a==='pc'){cid=b.dataset.id;custUi();return tiles()}if(a==='cx'){cid='';custUi();return tiles()}
   if(a==='add'||a==='inc'){const n=q[p.id]||0,v=qsClamp(p,n+(a==='inc'?Number(b.dataset.v):qsStep(p)));if(v===n)return toast('موجودی «'+p.name+'» کافی نیست.');q[p.id]=v}
   else if(a==='sub'){const v=qsClamp(p,(q[p.id]||0)-qsStep(p));if(v)q[p.id]=v;else delete q[p.id]}else if(a[0]==='m')m=a.slice(1);else if(a==='no')return close();
+  else if(a==='print'){if(!cnt())return;try{HanaInvoiceActions.printDraft(q,cid);toast('پیش‌فاکتور بدون ثبت آماده چاپ شد')}catch(err){toast(err.message)}return}
   else if(a==='ok'){if(!cnt())return;const id=await qsCommit(q,m,cid);if(id){close();toast('فاکتور ثبت شد');render();showInv(id)}return}
   tiles()};custUi();tiles();
  $('#dlg').oninput=e=>{const i=e.target.closest&&e.target.closest('.qin');if(!i)return;const p=prod(i.dataset.id),v=qsClamp(p,num(i.value));if(v)q[p.id]=v;else delete q[p.id];const lt=$('#lt-'+p.id);if(lt)lt.textContent=T(v*p.price);bar()};
