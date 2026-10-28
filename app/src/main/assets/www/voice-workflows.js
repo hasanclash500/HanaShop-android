@@ -9,6 +9,8 @@
   const t=digits(s).trim(),n=Number(t.replace(/\s/g,''));
   if(t&&Number.isFinite(n)&&n>=0)return n;
   if(t==='نیم')return .5;
+  const scaled=t.replace(/\s*تومان$/,'').match(/^(\d+(?:\.\d+)?)\s*(هزار|میلیون)$/);
+  if(scaled)return Number(scaled[1])*(scaled[2]==='هزار'?1000:1000000);
   if(!t||!/^(?:(?:صفر|یک|یه|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|دویست|سیصد|چهارصد|پانصد|ششصد|هفتصد|هشتصد|نهصد|هزار|میلیون|و|نیم|ممیز)\s*)+$/.test(t))return null;
   let total=0,current=0,decimal='',afterDecimal=false;
   for(const w of t.split(/\s+/).filter(x=>x&&x!=='و')){
@@ -120,6 +122,48 @@
   return result;
  }
  let draft=null;
+ const missing=d=>{
+  const f=d.fields;
+  if(d.kind==='customer')return !f.name?'نام مشتری چیست؟':!f.phone?'شماره موبایل مشتری را بگویید.':'';
+  if(d.kind==='buy'||d.kind==='sale'){
+   if(!f.pid)return'نام کامل عطر یا کالا چیست؟';
+   if(!(f.qty>0))return'چه مقدار یا چند عدد؟ برای نمونه «۵۰ گرم».';
+   if(d.kind==='buy'&&!(f.cost>0))return'قیمت خرید هر واحد را بگویید؛ مثلاً «۴۵ هزار تومان».';
+  }
+  if(d.kind==='expense')return f.amount===null?'مبلغ هزینه چقدر است؟':!f.description?'شرح هزینه چیست؟':'';
+  if(d.kind==='reminder')return !f.title?'عنوان کار چیست؟':!f.date?'تاریخ یادآوری را بگویید؛ مثل «فردا» یا «۱۴۰۵/۰۸/۱۲».':'';
+  if(d.kind==='product')return !f.name?'نام کالای جدید چیست؟':f.price===null?'قیمت فروش هر واحد چیست؟':'';
+  return'';
+ };
+ function followup(d,raw){
+  const s=normalize(raw),f=d.fields,kind=d.kind;
+  if(/^(لغو|بیخیال|کنسل|انصراف)$/.test(s)){draft=null;const p=document.getElementById('hvPending');if(p)p.style.display='none';return'درخواست لغو شد. هیچ تغییری ثبت نشده است.'}
+  if(kind==='customer'){
+   if(!f.name){f.name=cleanName(s);return null}
+   const n=normPhone(digits(s));if(n){f.phone=n;return null}
+  }
+  if(kind==='sale'||kind==='buy'){
+   if(!f.pid){const m=chooseFrom(db.products,s);if(m.value){f.pid=m.value.id;d.errors=d.errors.filter(x=>!x.includes('کالا'));return null}}
+   if(!(f.qty>0)){const n=numericBeforeUnit(s)??spokenNumber(s);if(n>0){f.qty=n;return null}}
+   if(kind==='buy'&&!(f.cost>0)){const n=amountAfter(s,['قیمت خرید','قیمت','فی'])??spokenNumber(s.replace(/تومان$/,''));if(n>0){f.cost=n;return null}}
+  }
+  if(kind==='expense'){
+   if(f.amount===null){const n=amountAfter(s,['مبلغ','هزینه'])??spokenNumber(s.replace(/تومان$/,''));if(n!==null){f.amount=n;return null}}
+   if(!f.description){f.description=s.slice(0,160);return null}
+  }
+  if(kind==='reminder'){
+   if(!f.title){f.title=s.slice(0,160);return null}
+   if(!f.date){const t=digits(s).match(/1[34]\d{2}\/\d{1,2}\/\d{1,2}/);
+    if(t&&validJ(t[0]))f.date=normJ(t[0]);else if(/فردا/.test(s))f.date=addDays(toJ(),1);else if(/امروز/.test(s))f.date=toJ();
+    if(f.date)return null
+   }
+  }
+  if(kind==='product'){
+   if(!f.name){f.name=s;return null}
+   if(f.price===null){const n=amountAfter(s,['قیمت فروش','قیمت'])??spokenNumber(s.replace(/تومان$/,''));if(n!==null){f.price=n;return null}}
+  }
+  return'این پاسخ را به‌طور مطمئن تشخیص ندادم؛ دوباره بگویید یا «تأیید و باز کردن فرم» را بزنید.';
+ }
  const labels={customer:'مشتری جدید',sale:'فروش',buy:'خرید',expense:'هزینه',reminder:'یادآوری',product:'محصول جدید'};
  function report(d){
   const f=d.fields,items=[['نام',f.name],['کالا',f.pid?prod(f.pid)?.name:null],['مشتری',f.cid?cust(f.cid)?.name:null],
@@ -131,13 +175,18 @@
    '\nبا تأیید، فقط فرم مربوط باز و اطلاعات شناسایی‌شده در آن قرار می‌گیرد. برای ثبت نهایی خودتان «ذخیره/ثبت» را بزنید.';
  }
  function response(text){
-  const p=parse(text);if(!p){draft=null;return formerHandle(text)}
-  draft=p;
+  const recognized=parse(text),wasFollowing=!!draft&&!recognized;
+  let error='';
+  if(wasFollowing)error=followup(draft,text)||'';
+  else if(recognized)draft=recognized;
+  else return formerHandle(text);
+  const p=draft;
   const question=document.getElementById('hvQuestion');if(question)question.value=text;
-  const answer=document.getElementById('hvAnswer');if(answer)answer.textContent=report(p);
   const pending=document.getElementById('hvPending');
-  if(pending){pending.style.display='block';pending.dataset.action=p.kind}
-  return report(p);
+  if(pending){pending.style.display=p?'block':'none';if(p)pending.dataset.action=p.kind}
+  const result=p?report(p)+(missing(p)?'\n🎙️ سؤال بعدی: '+missing(p):'\nاطلاعات اصلی دریافت شد؛ آماده بازکردن فرم است.'):error;
+  const answer=document.getElementById('hvAnswer');if(answer)answer.textContent=error&&p?error+'\n'+result:result;
+  return result;
  }
  function applyFields(){
   if(!draft)return false;
