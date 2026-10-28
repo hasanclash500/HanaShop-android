@@ -496,7 +496,7 @@ function msgDlg(id,key){const c=cust(id),last=cSales(id).slice().sort((a,b)=>a.d
   location.href=ch==='sms'?`sms:${c.phone}?body=${t}`:ch==='wa'?`https://wa.me/${p}?text=${t}`:`https://t.me/+${p}`};
  $('#sms').onclick=()=>go('sms');$('#wa').onclick=()=>go('wa');$('#tg').onclick=()=>go('tg');$('#cp').onclick=()=>navigator.clipboard?.writeText($('#mx').value).then(()=>toast('کپی شد'))}
 /* --- فاکتور: تصویر، PDF واقعی، چاپ A4 / حرارتی ۸۰ و ۵۸، اشتراک‌گذاری --- */
-const FW={a4:794,f80:302,f58:219};
+const FW={a4:794,a5:559,f80:302,f58:219};
 function invText(s){const c=cust(s.cid);return `${db.shop.name}\nفاکتور ${s.no?fa(s.no):'(قدیمی)'} — ${fa(s.date)}\nمشتری: ${c?c.name:'مشتری گذری'}\n`+(s.lines.length?s.lines.map(l=>`• ${prod(l.pid)?.name||''} × ${fa(l.n-(l.ret||0))} = ${T((l.n-(l.ret||0))*l.price)}`).join('\n'):'• '+(s.desc||''))+`\nجمع: ${T(s.sub)}\nتخفیف: ${T(s.disc)}\nقابل پرداخت: ${T(s.total)}\nپرداخت‌شده: ${T(s.paid)}\nمانده: ${T(s.total-s.paid)}\n${db.shop.footer||''}`}
 function invCanvas(s,fmt){const W=FW[fmt]||794,S=2,pd=fmt==='a4'?40:10,fs=fmt==='a4'?16:fmt==='f58'?11:12,F='Vazirmatn,Tahoma,"Segoe UI",sans-serif',cv=document.createElement('canvas');cv.width=W*S;cv.height=4000*S;
  const x=cv.getContext('2d');x.scale(S,S);x.fillStyle='#fff';x.fillRect(0,0,W,4000);x.fillStyle='#000';x.direction='rtl';let y=pd+fs;const Rr=W-pd,Ll=pd;
@@ -508,7 +508,7 @@ function invCanvas(s,fmt){const W=FW[fmt]||794,S=2,pd=fmt==='a4'?40:10,fs=fmt===
  if(s.lines.length)s.lines.forEach(l=>{const q=l.n-(l.ret||0);if(!q)return;x.font=`bold ${fs}px ${F}`;tx_(fit(prod(l.pid)?.name||'',W-2*pd),Rr,'right',true);y+=fs*1.5;row(fa(q)+' × '+fa(l.price),fa(q*l.price))});else{tx_(fit(s.desc||'خرید قدیمی',W-2*pd),Rr,'right');y+=fs*1.6}
  hr();row('جمع',T(s.sub));if(s.disc)row('تخفیف',T(s.disc));row('قابل پرداخت',T(s.total),true);row('پرداخت‌شده',T(s.paid));row('مانده',T(s.total-s.paid));hr();if(db.shop.footer){tx_(fit(db.shop.footer,W-2*pd),W/2,'center');y+=fs*1.6}
  const o=document.createElement('canvas');o.width=W*S;o.height=Math.ceil((y+pd)*S);o.getContext('2d').drawImage(cv,0,0);return o}
-function pdfFromJpeg(jpeg,w,h,fmt){const pw=fmt==='a4'?595.28:fmt==='f80'?226.77:164.41,ph0=pw*h/w,ph=fmt==='a4'?Math.max(841.89,ph0):ph0,enc=new TextEncoder(),parts=[],offs=[];let len=0;
+function pdfFromJpeg(jpeg,w,h,fmt){const pw=fmt==='a4'?595.28:fmt==='a5'?419.53:fmt==='f80'?226.77:164.41,ph0=pw*h/w,ph=fmt==='a4'?Math.max(841.89,ph0):fmt==='a5'?Math.max(595.28,ph0):ph0,enc=new TextEncoder(),parts=[],offs=[];let len=0;
  const push=u=>{parts.push(u);len+=u.length},S=t=>push(enc.encode(t)),obj=(n,b)=>{offs[n]=len;S(n+' 0 obj\n'+b+'\nendobj\n')};
  S('%PDF-1.4\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
  obj(3,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw.toFixed(2)} ${ph.toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
@@ -520,7 +520,7 @@ const invPdf=(s,fmt)=>{const cv=invCanvas(s,fmt),b=atob(cv.toDataURL('image/jpeg
 const invPng=(s,fmt)=>new Promise(r=>invCanvas(s,fmt).toBlob(r,'image/png'));
 async function shareFile(blob,name,text){if(window.AndroidBridge){AndroidBridge.shareFile(name,await blobB64(blob),blob.type,text||'');return}const f=new File([blob],name,{type:blob.type});try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],text,title:name});return}}catch(e){if(e.name==='AbortError')return}
  dlf(name,blob,blob.type);toast('اشتراک‌گذاری مستقیم در این حالت ممکن نبود؛ فایل ذخیره شد و می‌توانید از هر برنامه‌ای ارسالش کنید.')}
-function pageStyle(fmt){let st=document.getElementById('pgst');if(!st){st=document.createElement('style');st.id='pgst';document.head.appendChild(st)}st.textContent=`@page{size:${fmt==='a4'?'A4':fmt==='f80'?'80mm auto':'58mm auto'};margin:${fmt==='a4'?'10mm':'2mm'}}`}
+function pageStyle(fmt){let st=document.getElementById('pgst');if(!st){st=document.createElement('style');st.id='pgst';document.head.appendChild(st)}st.textContent=`@page{size:${fmt==='a4'?'A4':fmt==='a5'?'A5':fmt==='f80'?'80mm auto':'58mm auto'};margin:${fmt==='a4'?'10mm':'2mm'}}`}
 function printHTML(html,fmt){const p=$('#pr');p.className=fmt;p.innerHTML=html;pageStyle(fmt);window.AndroidBridge?AndroidBridge.printPage():window.print()}
 function showInv(id){const s=db.sales.find(x=>x.id===id);if(!s)return;const c=cust(s.cid),f0=db.pfmt||'a4';
  modal(`<div id="ip">${invHTML(s)}</div><label>قالب</label><select id="fm"><option value="a4">A4</option><option value="f80">پرینتر حرارتی ۸۰ میلی‌متر</option><option value="f58">پرینتر حرارتی ۵۸ میلی‌متر</option></select>
