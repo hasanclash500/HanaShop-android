@@ -82,7 +82,7 @@ jobs:
           sed -i "s/applicationId 'com.hana.shop'/applicationId 'com.hana.shop.trial.fixed'/" app/build.gradle
           sed -i 's#android:label="@string/app_name"#android:label="حنا آزمایشی اصلاح‌شده"#' app/src/main/AndroidManifest.xml
           grep -q "applicationId 'com.hana.shop.trial.fixed'" app/build.gradle
-          grep -q 'android:label="حنا آزمایشی"' app/src/main/AndroidManifest.xml
+          grep -q 'android:label="حنا آزمایشی اصلاح‌شده"' app/src/main/AndroidManifest.xml
           gradle --no-daemon clean assembleDebug
 
       - name: Upload isolated test APK
