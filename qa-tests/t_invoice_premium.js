@@ -13,7 +13,7 @@ check('legacy backup defaults to elegant layout',R('HanaInvoicePremium.mode(Hana
 let elegant=R("HanaInvoicePremium.html(db.sales[0],'elegant')");
 check('elegant header and original invoice number',elegant.includes('p-inv-elegant')&&elegant.includes('گالری عطر حنا')&&elegant.includes('فاکتور فروش')&&elegant.includes('۲'));
 check('elegant six-column table with product',elegant.includes('قیمت کل (تومان)')&&elegant.includes('کرید اونتوس')&&elegant.includes('گرم'));
-check('elegant total, paid and remaining displayed',elegant.includes('۱٬۲۶۰٬۰۰۰')||elegant.includes('۱,۲۶۰,۰۰۰'));
+check('elegant total, paid and remaining displayed',elegant.includes(R('fa(1260000)'))&&elegant.includes(R('fa(60000)')));
 check('amount words correct',R("HanaInvoicePremium.amountWords(1260000)")==='یک میلیون و دویست و شصت هزار تومان');
 check('no floating or invented amount words',R("HanaInvoicePremium.amountWords(0)")==='صفر تومان');
 check('no malformed large amount',R("HanaInvoicePremium.amountWords(2001000000)").includes('دو میلیارد'));
