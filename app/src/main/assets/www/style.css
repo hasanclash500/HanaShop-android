@@ -98,3 +98,21 @@ dialog{box-shadow:0 20px 60px #0005;max-height:90vh}dialog::backdrop{backdrop-fi
 }
 #fab.hana-bot:active{cursor:grabbing;transform:scale(.97)}
 #fab.hana-bot:focus-visible{outline:3px solid var(--ac);outline-offset:3px}
+
+/* Invoice list: mobile-friendly cards instead of cramped five-column table. */
+.invoice-list{max-height:min(63vh,720px);overflow-y:auto;margin:12px 0;display:flex;flex-direction:column;gap:10px}
+.invoice-row{padding:12px;border:1px solid var(--bd);border-radius:14px;background:var(--card)}
+.invoice-row-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;color:var(--mu);font-size:13px}
+.invoice-row-top b{color:var(--pr);font-size:15px}
+.invoice-row-main{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0;font-size:15px;overflow-wrap:anywhere}
+.invoice-row-main strong{flex:1;min-width:0}.invoice-row-main b{white-space:nowrap}
+.invoice-row-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.invoice-row-actions .b{margin:0;min-width:0;padding:8px 5px;font-size:14px}
+.invoice-row-actions .b:disabled{opacity:.4}
+.inv-edit-line{padding:12px 10px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);margin:10px 0}
+.inv-edit-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.inv-edit-line .b.d{min-height:36px;padding:4px 12px;font-size:13px}
+.invoice-show-actions{margin-top:12px}
+.qs-save-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qs-save-actions button.b{margin:0;padding:12px 5px;min-height:51px;font-size:15px}
+@media(max-width:380px){.invoice-row-actions,.qs-save-actions{grid-template-columns:1fr}.invoice-row-main{font-size:14px}}
