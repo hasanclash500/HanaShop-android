@@ -54,7 +54,7 @@ check('reject script image data',R("HanaInvoiceStudio.safeImg('javascript:alert(
 const firstPrompt=R("HanaVoiceForms.respond('ثبت مشتری')");
 check('guided customer creation asks missing name',firstPrompt.includes('نام مشتری'));
 const secondPrompt=R("HanaVoiceForms.respond('آرمان عزیزی')");
-check('guided assistant captures name in second turn',secondPrompt.includes('آرمان عزیزی'));
+check('guided assistant captures name in second turn',R("HanaVoiceForms.getDraft().fields.name")==='ارمان عزیزی');
 const thirdPrompt=R("HanaVoiceForms.respond('09125551234')");
 check('guided assistant captures phone in third turn',R("HanaVoiceForms.getDraft().fields.phone")==='09125551234');
 check('resolved customer name error clears',R("HanaVoiceForms.getDraft().errors.length")===0);
