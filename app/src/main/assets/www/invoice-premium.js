@@ -26,8 +26,9 @@
  }
  function data(s){
   const c=customer(s),extra=details(s),cfg=sty(),shop=seller(cfg);
+  const activeLines=Array.isArray(s.lines)?s.lines.filter(l=>nval(l.n)-nval(l.ret)>0):[];
   const lines=HanaInvoiceStudio.rows(s).map((r,i)=>({
-   index:i+1,name:r.name||'کالا/خدمت',qty:nval(r.qty),unit:prod(s.lines?.[i]?.pid)?.unit||'عدد',
+   index:i+1,name:r.name||'کالا/خدمت',qty:nval(r.qty),unit:prod(activeLines[i]?.pid)?.unit||'عدد',
    price:nval(r.price),total:Math.round(nval(r.total)),
    discount:0,tax:null
   }));
