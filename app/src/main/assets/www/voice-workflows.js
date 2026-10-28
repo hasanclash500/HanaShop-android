@@ -139,7 +139,7 @@
   const s=normalize(raw),f=d.fields,kind=d.kind;
   if(/^(لغو|بیخیال|کنسل|انصراف)$/.test(s)){draft=null;const p=document.getElementById('hvPending');if(p)p.style.display='none';return'درخواست لغو شد. هیچ تغییری ثبت نشده است.'}
   if(kind==='customer'){
-   if(!f.name){f.name=cleanName(s);return null}
+   if(!f.name){f.name=cleanName(s);if(f.name)d.errors=d.errors.filter(e=>!e.includes('نام مشتری'));return null}
    const n=normPhone(digits(s));if(n){f.phone=n;return null}
   }
   if(kind==='sale'||kind==='buy'){
@@ -159,7 +159,7 @@
    }
   }
   if(kind==='product'){
-   if(!f.name){f.name=s;return null}
+   if(!f.name){f.name=s;if(f.name)d.errors=d.errors.filter(e=>!e.includes('نام محصول'));return null}
    if(f.price===null){const n=amountAfter(s,['قیمت فروش','قیمت'])??spokenNumber(s.replace(/تومان$/,''));if(n!==null){f.price=n;return null}}
   }
   return'این پاسخ را به‌طور مطمئن تشخیص ندادم؛ دوباره بگویید یا «تأیید و باز کردن فرم» را بزنید.';
