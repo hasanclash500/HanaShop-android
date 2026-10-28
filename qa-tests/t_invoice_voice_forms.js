@@ -21,6 +21,9 @@ p=R("HanaVoiceForms.parse('خرید ۵۰ گرم کرید اونتوس قیمت �
 check('buy intent',p.kind==='buy');
 check('buy quantity',p.fields.qty===50);
 check('buy unit price parsed',p.fields.cost===45000);
+p=R("HanaVoiceForms.parse('خرید پنجاه گرم کرید اونتوس قیمت خرید ۴۵ هزار تومان')");
+check('spoken quantity in words',p.fields.qty===50);
+check('spoken price with thousand scale',p.fields.cost===45000);
 p=R("HanaVoiceForms.parse('ثبت هزینه مبلغ ۵۰۰۰۰ بابت آب برق')");
 check('expense intent',p.kind==='expense');
 check('expense value',p.fields.amount===50000);
