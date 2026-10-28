@@ -2,7 +2,7 @@
 /* Invoice Studio. All media and settings remain on-device in the existing JSON backup.
  * Historical invoice records are never altered when the template is changed. */
 (function(){
- const DEFAULT={color:'#1f5c4a',format:'a4',phone:'',address:'',title:'فاکتور فروش',logo:'',stamp:'',signature:'',showStamp:true,showSignature:true};
+ const DEFAULT={color:'#2452ce',format:'a4',template:'elegant',phone:'',address:'',title:'فاکتور فروش',subtitle:'فروش عطر و ادکلن',sellerNationalId:'',sellerEconomicCode:'',sellerRegisterNo:'',sellerTaxId:'',bankInfo:'',legalNote:'',showBasmalah:true,logo:'',stamp:'',signature:'',showStamp:true,showSignature:true};
  const safeColor=c=>/^#[0-9a-f]{6}$/i.test(c||'')?c:DEFAULT.color;
  const safeImg=s=>typeof s==='string'&&/^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(s)&&s.length<210000?s:'';
  const config=()=>({...DEFAULT,...(db.invoiceDesign||{}),color:safeColor(db.invoiceDesign?.color)});
@@ -19,6 +19,7 @@
  }
  function html(s){
   const cfg=config(),logo=safeImg(cfg.logo),stamp=cfg.showStamp?safeImg(cfg.stamp):'',signature=cfg.showSignature?safeImg(cfg.signature):'';
+  if(['f80','f58'].includes(db.pfmt))return originalHtml(s);
   const base=originalHtml(s);
   const header='<section class="hana-invoice-header" style="display:flex;gap:12px;align-items:center;border-bottom:3px solid '+cfg.color+';padding:10px 5px;background:#fff;color:'+cfg.color+'">'+
    (logo?'<img src="'+logo+'" alt="لوگوی فروشگاه" style="max-width:76px;max-height:76px;object-fit:contain">':'')+
@@ -104,9 +105,19 @@
   modal('<h3>🎨 تنظیمات فاکتور</h3><div class="k">تغییر این تنظیمات روی نمایش و فایل خروجی اثر دارد؛ مبلغ و تاریخچه فاکتورها تغییر نمی‌کنند. تصاویر در بک‌آپ JSON ذخیره می‌شوند.</div>'+
    '<label>عنوان فاکتور</label><input id="ifsTitle" value="'+safeText(c.title)+'" maxlength="90">'+
    '<label>رنگ فاکتور</label><input id="ifsColor" type="color" value="'+c.color+'">'+
+   '<label>قالب پیش‌فرض فاکتور A4/A5</label><select id="ifsTemplate"><option value="elegant">فروش شکیل (سرصفحه رنگی)</option><option value="formal">رسمی جدولی (اطلاعات حقوقی)</option><option value="classic">ساده فعلی</option></select>'+
    '<label>قطع پیش‌فرض</label><select id="ifsFormat"><option value="a4">A4</option><option value="a5">A5</option><option value="f80">حرارتی ۸۰ میلی‌متر</option><option value="f58">حرارتی ۵۸ میلی‌متر</option></select>'+
    '<label>تلفن چاپ‌شونده</label><input id="ifsPhone" value="'+safeText(c.phone)+'" placeholder="'+safeText(db.shop.phone||'شماره فروشگاه')+'">'+
    '<label>آدرس چاپ‌شونده</label><textarea id="ifsAddress" rows="2" placeholder="در صورت خالی بودن، آدرس فروشگاه استفاده می‌شود">'+safeText(c.address)+'</textarea>'+
+   '<label>زیرعنوان فروشگاه</label><input id="ifsSubtitle" value="'+safeText(c.subtitle)+'" maxlength="80">'+
+   '<label>شناسه ملی فروشنده (در صورت وجود)</label><input id="ifsNational" value="'+safeText(c.sellerNationalId)+'" maxlength="40">'+
+   '<label>کد اقتصادی فروشنده</label><input id="ifsEconomic" value="'+safeText(c.sellerEconomicCode)+'" maxlength="40">'+
+   '<label>شماره ثبت فروشنده</label><input id="ifsReg" value="'+safeText(c.sellerRegisterNo)+'" maxlength="40">'+
+   '<label>شناسه مالیاتی/حافظه مالیاتی (در صورت وجود)</label><input id="ifsTax" value="'+safeText(c.sellerTaxId)+'" maxlength="60">'+
+   '<label>مشخصات واریز / شماره کارت</label><input id="ifsBank" value="'+safeText(c.bankInfo)+'" maxlength="120">'+
+   '<label>توضیح پایین فاکتور رسمی</label><textarea id="ifsLegalNote" rows="2">'+safeText(c.legalNote)+'</textarea>'+
+   '<label><input type="checkbox" id="ifsBasmala" style="width:auto" '+(c.showBasmalah?'checked':'')+'> نمایش باسمه تعالی</label>'+
+   '<div class="k">توجه: ظاهر «رسمی» به معنی تأیید مالیاتی یا جایگزین صورتحساب سامانه مؤدیان نیست. اطلاعات و تکالیف قانونی باید جداگانه بررسی شوند.</div>'+
    ['logo','stamp','signature'].map((name,i)=>'<div class="card"><label>'+['لوگو','مهر','امضا'][i]+'</label>'+
     '<img id="ifsPreview_'+name+'" style="max-height:95px;max-width:150px;display:'+(safeImg(c[name])?'block':'none')+'" src="'+safeImg(c[name])+'">'+
     '<input id="ifsFile_'+name+'" type="file" accept="image/png,image/jpeg,image/webp">'+
@@ -114,7 +125,7 @@
    '<label><input type="checkbox" id="ifsShowStamp" style="width:auto" '+(c.showStamp?'checked':'')+'> نمایش مهر</label>'+
    '<label><input type="checkbox" id="ifsShowSignature" style="width:auto" '+(c.showSignature?'checked':'')+'> نمایش امضا</label>'+
    '<div class="err" id="ifsError"></div><button class="b" id="ifsSave">ذخیره تنظیمات فاکتور</button><button class="b s" id="ifsClose">بستن</button>');
-  $('#ifsFormat').value=validFormat(c.format);$('#ifsClose').onclick=close;
+  $('#ifsFormat').value=validFormat(c.format);$('#ifsTemplate').value=['elegant','formal','classic'].includes(c.template)?c.template:'elegant';$('#ifsClose').onclick=close;
   const selected={logo:c.logo,stamp:c.stamp,signature:c.signature};let busy=false;
   for(const k of ['logo','stamp','signature']){
    $('#ifsFile_'+k).onchange=async e=>{
@@ -127,8 +138,15 @@
   $('#ifsSave').onclick=async()=>{
    if(busy)return $('#ifsError').textContent='بارگذاری تصویر تمام نشده است.';
    const next={color:safeColor($('#ifsColor').value),format:validFormat($('#ifsFormat').value),
+    template:['elegant','formal','classic'].includes($('#ifsTemplate').value)?$('#ifsTemplate').value:'elegant',
     title:$('#ifsTitle').value.trim().slice(0,90)||DEFAULT.title,
+    subtitle:$('#ifsSubtitle').value.trim().slice(0,80),
     phone:$('#ifsPhone').value.trim().slice(0,100),address:$('#ifsAddress').value.trim().slice(0,400),
+    sellerNationalId:$('#ifsNational').value.trim().slice(0,40),
+    sellerEconomicCode:$('#ifsEconomic').value.trim().slice(0,40),
+    sellerRegisterNo:$('#ifsReg').value.trim().slice(0,40),sellerTaxId:$('#ifsTax').value.trim().slice(0,60),
+    bankInfo:$('#ifsBank').value.trim().slice(0,120),legalNote:$('#ifsLegalNote').value.trim().slice(0,300),
+    showBasmalah:$('#ifsBasmala').checked,
     logo:selected.logo,stamp:selected.stamp,signature:selected.signature,
     showStamp:$('#ifsShowStamp').checked,showSignature:$('#ifsShowSignature').checked};
    if(await tx(()=>{db.invoiceDesign=next;db.pfmt=next.format})){close();toast('تنظیمات فاکتور ذخیره شد')}
