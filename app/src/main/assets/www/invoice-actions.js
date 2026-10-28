@@ -199,10 +199,19 @@
   $('#invoiceClose').onclick=close;draw();
  }
  invList=list;
+ const oldReturn=retForm;
+ retForm=function(id){
+  const s=sales(id);if(!s||s.status==='cancel')return toast('مرجوعی فاکتور لغوشده یا ناموجود مجاز نیست.');
+  return oldReturn(id);
+ };
  const oldShow=showInv;
  showInv=function(id){
   oldShow(id);
   const s=sales(id),dlg=$('#dlg');if(!s||!dlg)return;
+  if(s.status==='cancel'){
+   const btn=$('#rt');if(btn)btn.remove();
+   const prev=$('#ip');if(prev)prev.insertAdjacentHTML('afterbegin','<div class="err" style="font-size:19px;text-align:center;border:2px solid;padding:9px">باطل شده — این فاکتور لغو شده است</div>');
+  }
   const el=document.createElement('div');el.className='invoice-show-actions card';
   el.innerHTML=s.status==='cancel'?'<div class="err">این فاکتور لغو شده است؛ فقط مشاهده و چاپ سابقه مجاز است.</div>':
    '<div class="invoice-row-actions"><button class="b s" id="invoiceEdit">✏️ ویرایش فاکتور</button>'+
