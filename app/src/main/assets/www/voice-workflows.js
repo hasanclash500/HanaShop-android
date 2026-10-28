@@ -43,14 +43,13 @@
    const top=matches[0];if(matches[1].name.length===top.name.length)return{ambiguous:true,names:matches.slice(0,4).map(x=>x.name)};
    return{value:top}
   }
-  const lookup=eligible===db.products?HanaVoice.matchProduct:eligible===db.customers?HanaVoice.matchCustomer:null;
   const result=collection===db.products?HanaVoice.matchProduct(q):collection===db.customers?HanaVoice.matchCustomer(q):null;
   return result?{value:result.item||null,ambiguous:result.ambiguous,names:result.names}: {value:null};
  }
  function cleanName(t){return String(t||'').replace(/^(?:جدید|به نام|برای|مشتری|آقای|خانم)\s*/g,'').replace(/\s*(?:شماره|موبایل|تلفن|تاریخ تولد|متولد|قیمت|مبلغ)\s*.*/,'').trim()}
  function classify(raw){
   const s=normalize(raw);
-  if(/^(?:ثبت|اضافه کن|ایجاد|بساز)\s+(?:مشتری|شخص)\b/.test(s)||/^(?:مشتری|شخص)\s+جدید/.test(s))return'customer';
+  if(/^(?:ثبت|اضافه کن|ایجاد|بساز)\s+(?:مشتری|شخص)(?:\s|$)/.test(s)||/^(?:مشتری|شخص)\s+جدید/.test(s))return'customer';
   if(/^(?:ثبت|اضافه کن)\s+(?:فروش|فاکتور فروش)|^(?:فروش|بفروش)\s|^(?:فاکتور بزن)/.test(s))return'sale';
   if(/^(?:ثبت|اضافه کن)\s+(?:خرید|ورود موجودی)|^(?:خرید|بخر)\s/.test(s))return'buy';
   if(/^(?:ثبت|اضافه کن)\s+(?:هزینه|خرج)|^(?:هزینه جدید)/.test(s))return'expense';
@@ -111,7 +110,7 @@
    if(!f.title)result.warnings.push('عنوان یادآوری را در فرم کامل کنید.');
    if(!f.date)result.warnings.push('تاریخ دقیق شمسی را در فرم انتخاب کنید.');
   }else if(kind==='product'){
-   const first=s.replace(/^(ثبت|تعریف|اضافه کن)\s*/,'').replace(/^(کالا|محصول|عطر جدید|کالای جدید)\s*/,'');
+   const first=s.replace(/^(ثبت|تعریف|اضافه کن)\s*/,'').replace(/^(کالا|محصول|عطر جدید|کالای جدید)\s*/,'').replace(/^جدید\s*/,'');
    f.name=first.split(/\s*(?:قیمت خرید|قیمت فروش|موجودی|تعداد|با قیمت)\s*/)[0].trim();
    f.unit=/(میلی لیتر|میل)/.test(s)?'میلی‌لیتر':/(عدد|دانه)/.test(s)?'عدد':'گرم';
    f.cost=amountAfter(s,['قیمت خرید','بهای خرید']);f.price=amountAfter(s,['قیمت فروش']);
