@@ -11,11 +11,11 @@ let ok=0,fail=0;
 function check(name,result){console.log((result?'PASS ':'FAIL ')+name);result?ok++:fail++}
 const mixed=JSON.stringify({
  customers:[{id:265,name:'مشتری نمونه قدیمی',phone:'09120000000',promo:true},{id:'new-1',name:'مشتری جدید',phone:'09120000001',promo:false}],
- sales:[{id:'inv1',cid:'265',total:2000,paid:500,status:'part',date:'1405/08/06'},{id:'inv2',cid:'new-1',total:1000,paid:1000,status:'paid',date:'1405/08/06'}],
+ sales:[{id:'inv1',cid:'265',total:2000,paid:500,status:'part',date:'1405/08/06',lines:[]},{id:'inv2',cid:'new-1',total:1000,paid:1000,status:'paid',date:'1405/08/06',lines:[]}],
  payments:[{id:'pay1',cid:265,amt:300}],points:[{id:'pt1',cid:265,n:20}],
  reminders:[{id:'r1',cid:265,title:'پیگیری',done:false}],
  comms:[{id:'m1',cid:265,title:'تبریک'}],
- cheques:[{id:'ch1',party:265,status:'open'},{id:'ch2',party:'supplier1',status:'open'}],
+ cheques:[{id:'ch1',party:265,status:'open',type:'in'},{id:'ch2',party:'supplier1',status:'open',type:'out'}],
  campaigns:[{id:'campaign1',recips:[{cid:265,status:'pending'}]}],
  journal:[{id:'j1',lines:[{a:'1101',d:2500},{a:'4101',c:2500}]}],
  products:[{id:'p1',name:'عطر تست',qty:3,cost:1000,price:2000}]
@@ -42,5 +42,6 @@ R("db.customers=[{id:265,name:'test numeric'}]");
 check('numeric customer still found before next migration',R("cust('265').name")==='test numeric');
 let collision=R("(()=>{try{canonicalCustomerIds({customers:[{id:12},{id:'12'}]});return false}catch(e){return true}})()");
 check('ambiguous legacy ID collision safely refused',collision);
+R('db=blank()'); // Restore the harness state before asynchronous startup rendering.
 console.log('LEGACY CUSTOMER ID TESTS '+ok+' passed, '+fail+' failed');
 if(fail)process.exitCode=1;
