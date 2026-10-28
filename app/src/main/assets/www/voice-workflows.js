@@ -64,7 +64,7 @@
   if(!kind)return null;
   const result={kind,original:raw,fields:{},errors:[],warnings:[]},f=result.fields;
   if(kind==='customer'){
-   const first=s.replace(/^(ثبت|اضافه کن|ایجاد|بساز)\s*/,'').replace(/^(مشتری|شخص)\s*/,'').replace(/^جدید\s*/,'');
+   const first=String(raw).trim().replace(/^(ثبت|اضافه کن|ایجاد|بساز)\s*/,'').replace(/^(مشتری|شخص)\s*/,'').replace(/^جدید\s*/,'');
    const phoneMatch=digits(s).match(/(?:\b0?9\d{9}\b|\b989\d{9}\b)/);
    if(phoneMatch)f.phone=normPhone(phoneMatch[0]);
    const parts=first.split(/\s*(?:شماره|موبایل|تلفن|تاریخ تولد|متولد)\s*/);
@@ -112,7 +112,7 @@
    if(!f.title)result.warnings.push('عنوان یادآوری را در فرم کامل کنید.');
    if(!f.date)result.warnings.push('تاریخ دقیق شمسی را در فرم انتخاب کنید.');
   }else if(kind==='product'){
-   const first=s.replace(/^(ثبت|تعریف|اضافه کن)\s*/,'').replace(/^(کالا|محصول|عطر جدید|کالای جدید)\s*/,'').replace(/^جدید\s*/,'');
+   const first=String(raw).trim().replace(/^(ثبت|تعریف|اضافه کن)\s*/,'').replace(/^(کالا|محصول|عطر جدید|کالای جدید)\s*/,'').replace(/^جدید\s*/,'');
    f.name=first.split(/\s*(?:قیمت خرید|قیمت فروش|موجودی|تعداد|با قیمت)\s*/)[0].trim();
    f.unit=/(میلی لیتر|میل)/.test(s)?'میلی‌لیتر':/(عدد|دانه)/.test(s)?'عدد':'گرم';
    f.cost=amountAfter(s,['قیمت خرید','بهای خرید']);f.price=amountAfter(s,['قیمت فروش']);
@@ -139,7 +139,7 @@
   const s=normalize(raw),f=d.fields,kind=d.kind;
   if(/^(لغو|بیخیال|کنسل|انصراف)$/.test(s)){draft=null;const p=document.getElementById('hvPending');if(p)p.style.display='none';return'درخواست لغو شد. هیچ تغییری ثبت نشده است.'}
   if(kind==='customer'){
-   if(!f.name){f.name=cleanName(s);if(f.name)d.errors=d.errors.filter(e=>!e.includes('نام مشتری'));return null}
+   if(!f.name){f.name=cleanName(raw);if(f.name)d.errors=d.errors.filter(e=>!e.includes('نام مشتری'));return null}
    const n=normPhone(digits(s));if(n){f.phone=n;return null}
   }
   if(kind==='sale'||kind==='buy'){
